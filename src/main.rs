@@ -1,6 +1,7 @@
 use std::{ffi::CStr, iter, time::Duration};
 
 use anyhow::Result;
+use cairo::{Format, ImageSurface};
 use clap::{Parser, Subcommand};
 use embedded_graphics::{
     draw_target::DrawTarget,
@@ -253,6 +254,31 @@ impl USBD480Display {
         Ok(())
     }
 
+    fn write_bytes(&self, pixels: &[u8]) -> Result<()> {
+        const MAX_PACKET_SIZE: usize = 4096;
+
+        let mut current_address: u32 = 0;
+        let mut command = Vec::with_capacity(MAX_PACKET_SIZE);
+
+        for chunk in pixels.chunks(MAX_PACKET_SIZE) {
+            let pixel_count = (chunk.len() / 2) as u32 - 1;
+            let address = current_address.to_le_bytes();
+
+            command.extend_from_slice(&Self::WRITE_COMMAND.to_le_bytes());
+            command.extend_from_slice(&address);
+            command.extend_from_slice(&pixel_count.to_le_bytes());
+            command.extend_from_slice(&chunk);
+
+            self.write_to_bulk_endpoint(&command)?;
+
+            command.clear();
+
+            current_address += pixel_count as u32 + 1;
+        }
+
+        Ok(())
+    }
+
     fn write_pixels_contiguous(
         &self,
         area: &Rectangle,
@@ -391,6 +417,7 @@ impl DrawTarget for USBD480Display {
     }
 }
 
+#[allow(dead_code)]
 fn draw(display: &mut USBD480Display) -> Result<()> {
     // Create styles used by the drawing operations.
     let thin_stroke = PrimitiveStyle::with_stroke(Rgb565::from(BinaryColor::On), 1);
@@ -445,6 +472,41 @@ fn draw(display: &mut USBD480Display) -> Result<()> {
     Ok(())
 }
 
+fn draw_letter(display: &mut USBD480Display) -> Result<()> {
+    let Size { width, height } = display.size();
+
+    let mut surface = ImageSurface::create(Format::Rgb16_565, width as i32, height as i32)
+        .expect("Can't create surface with RGB565 format");
+
+    {
+        let context = cairo::Context::new(&surface)?;
+        context.set_source_rgb(1.0, 1.0, 1.0); // white
+        context.paint()?; // fill the surface with the background color
+
+        {
+            // Set up font, size, and text color
+            context.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            context.set_font_size(200.0); // Adjust size as needed
+            context.set_source_rgb(0.0, 0.0, 0.0); // black for the text
+
+            // Calculate position for centering the text
+            let text = "Hana";
+            let extents = context.text_extents(text)?;
+            let x = (width as f64 - extents.width()) / 2.0 - extents.x_bearing();
+            let y = (height as f64 - extents.height()) / 2.0 - extents.y_bearing();
+
+            // Draw text
+            context.move_to(x, y);
+            context.show_text(text)?;
+        }
+    }
+
+    let data = surface.data()?;
+    display.write_bytes(&data)?;
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let mut context = Context::new()?;
     let mut display = USBD480Display::open(&mut context)?;
@@ -453,7 +515,7 @@ fn main() -> Result<()> {
 
     match cli.command {
         CliCommand::Draw => {
-            draw(&mut display)?;
+            draw_letter(&mut display)?;
         }
         CliCommand::ShowDeviceDetails => {
             let device_details = display.get_device_details()?;

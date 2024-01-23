@@ -76,9 +76,9 @@ impl USBD480Display {
     pub const HEIGHT: u32 = 272;
 
     /// The USB vendor ID of the display.
-    const DISPLAY_VID: u16 = 0x16c0;
+    const VID: u16 = 0x16c0;
     /// The USB product ID of the display.
-    const DISPLAY_PID: u16 = 0x08a6;
+    const PID: u16 = 0x08a6;
 
     /// The command identifier of the WRITE command for the stream decoder.
     const WRITE_COMMAND: u16 = 0x5B41;
@@ -91,13 +91,11 @@ impl USBD480Display {
     /// Try to find a USBD480 display connected via USB.
     ///
     /// This will use the first such display that is found, other displays will be ignored.
-    pub fn open(context: &mut Context) -> Result<Self> {
+    pub fn open(context: &Context) -> Result<Self> {
         for device in context.devices()?.iter() {
             let device_desc = device.device_descriptor()?;
 
-            if device_desc.vendor_id() == Self::DISPLAY_VID
-                && device_desc.product_id() == Self::DISPLAY_PID
-            {
+            if device_desc.vendor_id() == Self::VID && device_desc.product_id() == Self::PID {
                 let handle = device.open()?;
                 let display = Self { handle };
 
@@ -474,7 +472,7 @@ fn draw(display: &mut USBD480Display) -> Result<()> {
     Ok(())
 }
 
-fn draw_letter(display: &mut USBD480Display) -> Result<()> {
+fn draw_letter(display: &USBD480Display) -> Result<()> {
     let Size { width, height } = display.size();
 
     let mut surface = ImageSurface::create(Format::Rgb16_565, width as i32, height as i32)
@@ -549,17 +547,17 @@ impl LmxButtons {
 }
 
 fn main() -> Result<()> {
-    let mut context = Context::new()?;
+    let context = Context::new()?;
     let hidapi = HidApi::new().context("Could not create a HidApi object")?;
 
-    let mut display = USBD480Display::open(&context)?;
+    let display = USBD480Display::open(&context)?;
     let lmx = LmxButtons::open(&hidapi)?;
 
     let cli = Cli::parse();
 
     match cli.command {
         CliCommand::Draw => {
-            draw_letter(&mut display)?;
+            draw_letter(&display)?;
         }
         CliCommand::ShowDeviceDetails => {
             let device_details = display.get_device_details()?;

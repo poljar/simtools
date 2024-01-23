@@ -20,6 +20,7 @@ use itertools::Itertools;
 use rusb::{
     request_type, Context, DeviceHandle, Direction, Error, Recipient, RequestType, UsbContext,
 };
+use strum::{EnumIter, IntoEnumIterator};
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -34,6 +35,7 @@ enum CliCommand {
     GetConfigValue,
     SetButtonColor { red: u8, green: u8, blue: u8 },
     SetBrightness { brightness: u8 },
+    RpmTest,
 }
 
 #[derive(Clone, Debug)]
@@ -507,6 +509,142 @@ fn draw_letter(display: &USBD480Display) -> Result<()> {
     Ok(())
 }
 
+struct LmxRpmLeds {
+    inner: HidDevice,
+    led_segments: [LedSegment; 4],
+}
+
+#[derive(Debug, Clone, Copy, EnumIter)]
+enum Led {
+    One = 2,
+    Two = 6,
+    Three = 10,
+    Four = 14,
+}
+
+struct LedSegment {
+    buffer: [u8; 21],
+}
+
+impl LedSegment {
+    const BYTES_PER_LED: usize = 4;
+
+    pub fn new(segment_id: u8) -> Self {
+        let mut buffer = [0u8; 21];
+        buffer[1] = segment_id;
+
+        Self { buffer }
+    }
+
+    pub fn set_color(&mut self, led: Led, r: u8, g: u8, b: u8, brightness: u8) {
+        let slice = &mut self.buffer[led as usize..led as usize + Self::BYTES_PER_LED];
+
+        slice[0] = r;
+        slice[1] = g;
+        slice[2] = b;
+        // Brightness
+        slice[3] = brightness
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.buffer
+    }
+}
+
+impl LmxRpmLeds {
+    const VID: u16 = 0x04d8;
+    const PID: u16 = 0x32af;
+
+    const LED_COUNT: u32 = 16;
+
+    pub fn open(hidapi: &HidApi) -> Result<Self> {
+        let inner = hidapi
+            .open(Self::VID, Self::PID)
+            .context("Could not open the LM-X RPM LEDs")?;
+
+        Ok(Self {
+            inner,
+            led_segments: [
+                LedSegment::new(0x02),
+                LedSegment::new(0x03),
+                LedSegment::new(0x07),
+                LedSegment::new(0x08),
+            ],
+        })
+    }
+
+    fn commit(&self) -> Result<()> {
+        // Data for the LED commit command.
+        const COMMIT_COMMAND: &'static [u8] = &[
+            0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+
+        self.inner.send_feature_report(COMMIT_COMMAND)?;
+
+        Ok(())
+    }
+
+    pub fn gradient(&mut self, percentage: u8) -> Result<()> {
+        let active_led_count =
+            (((Self::LED_COUNT + 1) * percentage as u32) as f64 / 100.0).floor() as u32;
+
+        let mut i = 0;
+        let gradient = colorgrad::CustomGradient::new()
+            .domain(&[0.0, 1.0])
+            .html_colors(&["blue", "purple"])
+            .build()?;
+
+        for segment in &mut self.led_segments {
+            for led in Led::iter() {
+                let brightness = if i >= active_led_count { 0x00 } else { 0x01 };
+                let percentage: f64 = (i + 1) as f64 / Self::LED_COUNT as f64;
+
+                let [r, g, b, _] = gradient.at(percentage).to_rgba8();
+
+                segment.set_color(led, r, g, b, brightness);
+
+                i += 1;
+            }
+
+            self.inner.send_feature_report(segment.as_bytes())?;
+        }
+
+        self.commit()?;
+
+        Ok(())
+    }
+
+    fn turn_off(&mut self) -> Result<()> {
+        for segment in &mut self.led_segments {
+            for led in Led::iter() {
+                segment.set_color(led, 0x00, 0x00, 0x00, 0x00);
+            }
+
+            self.inner.send_feature_report(segment.as_bytes())?;
+        }
+
+        self.commit()?;
+
+        Ok(())
+    }
+
+    pub fn test(&mut self) -> Result<()> {
+        self.turn_off()?;
+
+        let mut percentage: u8 = 0;
+
+        loop {
+            percentage += 1;
+            percentage %= 100;
+
+            self.gradient(percentage)?;
+
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+}
+
 struct LmxButtons {
     inner: HidDevice,
 }
@@ -552,6 +690,7 @@ fn main() -> Result<()> {
 
     let display = USBD480Display::open(&context)?;
     let lmx = LmxButtons::open(&hidapi)?;
+    let mut rpm = LmxRpmLeds::open(&hidapi)?;
 
     let cli = Cli::parse();
 
@@ -572,6 +711,7 @@ fn main() -> Result<()> {
         CliCommand::SetButtonColor { red, green, blue } => {
             lmx.set_color(red, green, blue)?;
         }
+        CliCommand::RpmTest => rpm.test()?,
     }
 
     Ok(())

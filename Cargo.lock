@@ -355,6 +355,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 
 [[package]]
+name = "hidapi"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "723777263b0dcc5730aec947496bd8c3940ba63c15f5633b288cc615f4f6af79"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+ "winapi",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -399,6 +411,7 @@ dependencies = [
  "cairo-rs",
  "clap",
  "embedded-graphics",
+ "hidapi",
  "itertools",
  "rusb",
 ]

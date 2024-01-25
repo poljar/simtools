@@ -1,12 +1,11 @@
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use cairo::{Format, ImageSurface};
 use clap::{Parser, Subcommand};
-use hidapi::HidApi;
-use rusb::Context;
 
-use devices::{LmxButtonPlate, LmxRpmLeds, USBD480Display};
+use devices::{LmxWheel, USBD480Display};
 
 mod devices;
+mod led_profile;
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -61,33 +60,28 @@ fn draw_letter(display: &USBD480Display) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    let context = Context::new()?;
-    let hidapi = HidApi::new().context("Could not create a HidApi object")?;
-
-    let display = USBD480Display::open(&context)?;
-    let lmx = LmxButtonPlate::open(&hidapi)?;
-    let mut rpm = LmxRpmLeds::open(&hidapi)?;
+    let mut lmx = LmxWheel::open()?;
 
     let cli = Cli::parse();
 
     match cli.command {
         CliCommand::Draw => {
-            draw_letter(&display)?;
+            draw_letter(lmx.display())?;
         }
         CliCommand::ShowDeviceDetails => {
-            let device_details = display.get_device_details()?;
+            let device_details = lmx.display().get_device_details()?;
             println!("Got device details: {device_details:#?}");
         }
         CliCommand::SetBrightness { brightness } => {
-            display.set_brightness(brightness)?;
+            lmx.display().set_brightness(brightness)?;
         }
         CliCommand::GetConfigValue => {
-            display.get_config_value()?;
+            lmx.display().get_config_value()?;
         }
         CliCommand::SetButtonColor { red, green, blue } => {
-            lmx.set_color(red, green, blue)?;
+            lmx.buttons().set_color(red, green, blue)?;
         }
-        CliCommand::RpmTest => rpm.test()?,
+        CliCommand::RpmTest => lmx.rpm_leds_mut().test()?,
     }
 
     Ok(())

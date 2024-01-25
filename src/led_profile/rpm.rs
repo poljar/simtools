@@ -1,0 +1,142 @@
+// Copyright (c) 2024 Damir Jelić
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+use std::time::Duration;
+
+use csscolorparser::Color;
+use serde::Deserialize;
+use uuid::Uuid;
+
+use super::{color_from_str, duration_from_int_ms};
+
+/// The configuration for a LED profile container which turns on LEDs based on the value of the RPM
+/// of the engine.
+///
+/// As the RPM increases more LEDs will be turned on, the color of the LEDs will be configured to
+/// follow a color gradient beginning with the [`RpmContainer::start_color`] and ending in
+/// [`RpmContainer::end_color`].
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct RpmContainer {
+    /// The human readable description of the [`RpmContainer`].
+    pub description: String,
+    /// The globally unique ID of the container.
+    pub container_id: Uuid,
+    /// Is this container enabled.
+    pub is_enabled: bool,
+    /// The number of the first LED this container should control.
+    pub start_position: u32,
+    /// The total number of LEDs this container should control.
+    pub led_count: u32,
+    /// Should we use the specified percentages to calculate how many LEDs need to be turned on
+    /// instead of the raw [`RpmContainer::rpm_min`] and [`RpmContainer::rpm_max`] values?
+    pub use_percent: bool,
+    /// The percentage of the RPM that should start turning LEDs on.
+    pub percent_min: f64,
+    /// The percentage of the RPM which should be considered the maximum RPM, or rather when the
+    /// gradient should reach its end and all the LEDs should be turned on.
+    pub percent_max: f64,
+    /// The value of the RPM that should start turning LEDs on.
+    #[serde(rename = "RPMMin")]
+    pub rpm_min: f64,
+    /// The value of the RPM which should be considered the maximum RPM, or rather when the
+    /// gradient should reach its end and all the LEDs should be turned on.
+    #[serde(rename = "RPMMax")]
+    pub rpm_max: f64,
+    /// The first color in the gradient, the gradient will begin with this color and transition
+    /// towards the [`RpmContainer::end_color`].
+    #[serde(deserialize_with = "color_from_str")]
+    pub start_color: Color,
+    /// The final color in the gradient.
+    #[serde(deserialize_with = "color_from_str")]
+    pub end_color: Color,
+    /// TODO: I don't know what this means.
+    pub gradient_on_all: bool,
+    /// Should the LEDs be filled out from right to left instead of the usual left to right
+    /// direction?
+    pub right_to_left: bool,
+    /// How long should the LED stay on and off when blinking, in other words how long do we wait
+    /// before we change the state of the LED.
+    #[serde(deserialize_with = "duration_from_int_ms")]
+    pub blink_delay: Duration,
+    /// Should the LEDs blink when the maximum RPM or percentage of it are reached.
+    pub blink_enabled: bool,
+    /// Should the LEDs only (or as well?) blink when the maximum RPM or percentage of it are
+    /// reached in the last gear?
+    pub blink_on_last_gear: bool,
+    /// TODO: What does this setting do?
+    pub use_led_dimming: bool,
+    /// TODO: What does this setting do?
+    pub fill_all_leds: bool,
+}
+
+/// The configuration for a LED profile container which turns on segments of LEDs based on the value
+/// of the RPM of the engine.
+///
+/// This container will divide a larger number of LEDs into smaller subsets or segments. Each
+/// segment can have a different configuration.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct RpmSegmentsContainer {
+    /// The human readable description of the [`RpmContainer`].
+    pub description: String,
+    /// The globally unique ID of the container.
+    pub container_id: Uuid,
+    /// Is this container enabled.
+    pub is_enabled: bool,
+    /// The number of the first LED this container should control.
+    pub start_position: u32,
+    /// The number of segments this container has. This value isn't particularly useful since it's
+    /// better to take a look at [`RPMSegmentsContainer::segments::len()`]
+    pub segments_count: u32,
+    /// Should the LEDs blink when TODO: When do we blink here exactly?
+    pub blink_enabled: bool,
+    /// How long should the LED stay on and off when blinking, in other words how long do we wait
+    /// before we change the state of the LED.
+    #[serde(deserialize_with = "duration_from_int_ms")]
+    pub blink_delay: Duration,
+    /// Should the LEDs only (or as well?) blink when the maximum RPM or percentage of it are
+    /// reached in the last gear?
+    pub blink_on_last_gear: bool,
+    /// The list of LED segments.
+    pub segments: Vec<LedSegment>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct LedSegment {
+    pub start_value: f64,
+    pub end_value: f64,
+    #[serde(deserialize_with = "color_from_str")]
+    pub normal_color: Color,
+    #[serde(deserialize_with = "color_from_str")]
+    pub blinking_color: Color,
+    pub use_blinking_color: bool,
+    pub led_count: u32,
+    pub sample_result: SampleResult,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct SampleResult {
+    pub width: u32,
+    pub position: u32,
+    pub columns: i32,
+}

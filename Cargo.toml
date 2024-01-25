@@ -2,6 +2,9 @@
 name = "lmx-cli"
 version = "0.1.0"
 edition = "2021"
+authors = ["Damir Jelić <poljar@termina.org.uk>"]
+license = "MIT"
+rust-version = "1.75"
 
 [dependencies]
 anyhow = "1.0.79"

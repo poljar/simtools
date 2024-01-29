@@ -26,6 +26,7 @@ use devices::{LmxWheel, USBD480Display};
 
 mod devices;
 mod led_profile;
+mod led_state;
 
 #[derive(Debug, Parser)]
 struct Cli {

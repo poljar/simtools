@@ -85,6 +85,8 @@ impl USBD480Display {
     /// The default timeout that is used for USB requests.
     const REQUEST_TIMEOUT: Duration = Duration::from_millis(100);
 
+    const INTERFACE: u8 = 0x00;
+
     /// Try to find a USBD480 display connected via USB.
     ///
     /// This will use the first such display that is found, other displays will be ignored.
@@ -93,7 +95,9 @@ impl USBD480Display {
             let device_desc = device.device_descriptor()?;
 
             if device_desc.vendor_id() == Self::VID && device_desc.product_id() == Self::PID {
-                let handle = device.open()?;
+                let mut handle = device.open()?;
+                handle.set_auto_detach_kernel_driver(true)?;
+                handle.claim_interface(Self::INTERFACE)?;
                 let display = Self { handle };
 
                 display.enable_stream_decoder()?;
@@ -302,10 +306,17 @@ impl USBD480Display {
 
             command.clear();
 
-            current_address += pixel_count as u32 + 1;
+            current_address += pixel_count + 1;
         }
 
         Ok(())
+    }
+}
+
+impl Drop for USBD480Display {
+    fn drop(&mut self) {
+        // TODO: Should we log a warning here? This could fail if the USB device was disconnected.
+        let _ = self.handle.release_interface(Self::INTERFACE);
     }
 }
 

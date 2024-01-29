@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::time::Duration;
+use std::{num::NonZeroUsize, time::Duration};
 
 use csscolorparser::Color;
 use serde::Deserialize;
@@ -32,8 +32,8 @@ pub struct SpeedLimiterAnimationContainer {
     pub description: String,
     pub container_id: Uuid,
     pub is_enabled: bool,
-    pub led_count: u32,
-    pub start_position: u32,
+    pub led_count: NonZeroUsize,
+    pub start_position: usize,
     #[serde(deserialize_with = "color_from_str")]
     pub color_1_alternate: Color,
     #[serde(deserialize_with = "color_from_str")]

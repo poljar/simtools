@@ -70,7 +70,7 @@ pub struct LedProfile {
 #[serde(tag = "ContainerType", rename_all = "PascalCase")]
 pub enum LedContainer {
     #[serde(rename = "RPMContainer")]
-    RPMContainer(RpmContainer),
+    RpmContainer(RpmContainer),
     #[serde(rename = "RPMSegmentsContainer")]
     RpmSegmentsContainer(RpmSegmentsContainer),
     RedlineReachedContainer(RedlineReachedContainer),

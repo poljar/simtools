@@ -18,10 +18,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::time::Duration;
+use std::{num::NonZeroUsize, time::Duration};
 
 use csscolorparser::Color;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+use uom::si::{
+    angular_velocity::revolution_per_minute,
+    f64::{AngularVelocity, Ratio},
+};
 use uuid::Uuid;
 
 use super::{color_from_str, duration_from_int_ms};
@@ -42,24 +46,26 @@ pub struct RpmContainer {
     /// Is this container enabled.
     pub is_enabled: bool,
     /// The number of the first LED this container should control.
-    pub start_position: u32,
+    pub start_position: usize,
     /// The total number of LEDs this container should control.
-    pub led_count: u32,
+    pub led_count: NonZeroUsize,
     /// Should we use the specified percentages to calculate how many LEDs need to be turned on
     /// instead of the raw [`RpmContainer::rpm_min`] and [`RpmContainer::rpm_max`] values?
     pub use_percent: bool,
     /// The percentage of the RPM that should start turning LEDs on.
-    pub percent_min: f64,
+    pub percent_min: Ratio,
     /// The percentage of the RPM which should be considered the maximum RPM, or rather when the
     /// gradient should reach its end and all the LEDs should be turned on.
-    pub percent_max: f64,
+    pub percent_max: Ratio,
     /// The value of the RPM that should start turning LEDs on.
     #[serde(rename = "RPMMin")]
-    pub rpm_min: f64,
+    #[serde(deserialize_with = "rpm_from_float")]
+    pub rpm_min: AngularVelocity,
     /// The value of the RPM which should be considered the maximum RPM, or rather when the
     /// gradient should reach its end and all the LEDs should be turned on.
     #[serde(rename = "RPMMax")]
-    pub rpm_max: f64,
+    #[serde(deserialize_with = "rpm_from_float")]
+    pub rpm_max: AngularVelocity,
     /// The first color in the gradient, the gradient will begin with this color and transition
     /// towards the [`RpmContainer::end_color`].
     #[serde(deserialize_with = "color_from_str")]
@@ -122,14 +128,14 @@ pub struct RpmSegmentsContainer {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct LedSegment {
-    pub start_value: f64,
-    pub end_value: f64,
+    pub start_value: Ratio,
+    pub end_value: Ratio,
     #[serde(deserialize_with = "color_from_str")]
     pub normal_color: Color,
     #[serde(deserialize_with = "color_from_str")]
     pub blinking_color: Color,
     pub use_blinking_color: bool,
-    pub led_count: u32,
+    pub led_count: NonZeroUsize,
     pub sample_result: SampleResult,
 }
 
@@ -139,4 +145,12 @@ pub struct SampleResult {
     pub width: u32,
     pub position: u32,
     pub columns: i32,
+}
+
+/// Helper to deserialize a float containing a RPM value into a [`AngularVelocity`] type.
+pub fn rpm_from_float<'de, D>(deserializer: D) -> Result<AngularVelocity, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    f64::deserialize(deserializer).map(AngularVelocity::new::<revolution_per_minute>)
 }

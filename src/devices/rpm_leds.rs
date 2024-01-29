@@ -18,51 +18,82 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::time::Duration;
-
 use anyhow::{Context as _, Result};
+use csscolorparser::Color;
 use hidapi::{HidApi, HidDevice};
+use simetry::assetto_corsa_competizione::Client;
 use strum::{EnumIter, IntoEnumIterator};
 
+use crate::led_state::{LedState, RpmLedState};
+
 pub struct LmxRpmLeds {
-    inner: HidDevice,
-    led_segments: [LedSegment; 4],
+    device: HidDevice,
+    leds: [u8; 21 * 4],
 }
 
 #[derive(Debug, Clone, Copy, EnumIter)]
-enum Led {
+pub enum LedNumber {
     One = 2,
     Two = 6,
     Three = 10,
     Four = 14,
 }
 
-struct LedSegment {
-    buffer: [u8; 21],
+pub struct Led<'a> {
+    buffer: &'a mut [u8],
 }
 
-impl LedSegment {
-    const BYTES_PER_LED: usize = 4;
-
-    pub fn new(segment_id: u8) -> Self {
-        let mut buffer = [0u8; 21];
-        buffer[1] = segment_id;
-
+impl<'a> Led<'a> {
+    fn new(buffer: &'a mut [u8]) -> Self {
         Self { buffer }
     }
 
-    pub fn set_color(&mut self, led: Led, r: u8, g: u8, b: u8, brightness: u8) {
-        let slice = &mut self.buffer[led as usize..led as usize + Self::BYTES_PER_LED];
+    pub fn set_color(&mut self, color: &Color) {
+        let [r, g, b, _] = color.to_rgba8();
 
-        slice[0] = r;
-        slice[1] = g;
-        slice[2] = b;
-        // Brightness
-        slice[3] = brightness
+        self.buffer[0] = r;
+        self.buffer[1] = g;
+        self.buffer[2] = b;
+    }
+
+    pub fn set_brightness(&mut self, brightness: u8) {
+        self.buffer[3] = brightness;
+    }
+}
+
+pub struct LedSegment<'a> {
+    buffer: &'a mut [u8],
+    device: &'a HidDevice,
+}
+
+impl<'a> LedSegment<'a> {
+    const BYTES_PER_LED: usize = 4;
+
+    pub fn get_led(&mut self, led: LedNumber) -> Led {
+        let buffer = &mut self.buffer[led as usize..led as usize + Self::BYTES_PER_LED];
+
+        Led { buffer }
+    }
+
+    #[allow(dead_code)]
+    pub fn leds(&mut self) -> impl Iterator<Item = Led> {
+        self.buffer[2..]
+            .chunks_exact_mut(Self::BYTES_PER_LED)
+            .map(Led::new)
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        &self.buffer
+        self.buffer
+    }
+
+    pub fn commit_segment(&self) -> Result<()> {
+        self.device
+            .send_feature_report(self.as_bytes())
+            .with_context(|| {
+                let segment_id = self.buffer[1];
+
+                format!("Could not commit the LED segment {segment_id:x}")
+            })
     }
 }
 
@@ -70,73 +101,60 @@ impl LmxRpmLeds {
     const VID: u16 = 0x04d8;
     const PID: u16 = 0x32af;
 
-    const LED_COUNT: u32 = 16;
+    const COMMAND_BUFFER_SIZE: usize = 21;
+    const SEGMENT_COUNT: usize = 4;
 
     pub fn open(hidapi: &HidApi) -> Result<Self> {
         let inner = hidapi
             .open(Self::VID, Self::PID)
             .context("Could not open the LM-X RPM LEDs")?;
 
+        let mut leds = [0u8; Self::COMMAND_BUFFER_SIZE * Self::SEGMENT_COUNT];
+
+        for (i, chunk) in leds.chunks_exact_mut(Self::COMMAND_BUFFER_SIZE).enumerate() {
+            let segment_id = match i {
+                0 => 0x02,
+                1 => 0x03,
+                2 => 0x07,
+                3 => 0x08,
+                _ => unreachable!("We should only have 4 LED segments"),
+            };
+
+            chunk[1] = segment_id;
+        }
+
         Ok(Self {
-            inner,
-            led_segments: [
-                LedSegment::new(0x02),
-                LedSegment::new(0x03),
-                LedSegment::new(0x07),
-                LedSegment::new(0x08),
-            ],
+            device: inner,
+            leds,
         })
     }
 
     fn commit(&self) -> Result<()> {
         // Data for the LED commit command.
-        const COMMIT_COMMAND: &'static [u8] = &[
+        const COMMIT_COMMAND: &[u8] = &[
             0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ];
 
-        self.inner.send_feature_report(COMMIT_COMMAND)?;
-
-        Ok(())
-    }
-
-    pub fn gradient(&mut self, percentage: u8) -> Result<()> {
-        let active_led_count =
-            (((Self::LED_COUNT + 1) * percentage as u32) as f64 / 100.0).floor() as u32;
-
-        let mut i = 0;
-        let gradient = colorgrad::CustomGradient::new()
-            .domain(&[0.0, 1.0])
-            .html_colors(&["blue", "purple"])
-            .build()?;
-
-        for segment in &mut self.led_segments {
-            for led in Led::iter() {
-                let brightness = if i >= active_led_count { 0x00 } else { 0x01 };
-                let percentage: f64 = (i + 1) as f64 / Self::LED_COUNT as f64;
-
-                let [r, g, b, _] = gradient.at(percentage).to_rgba8();
-
-                segment.set_color(led, r, g, b, brightness);
-
-                i += 1;
-            }
-
-            self.inner.send_feature_report(segment.as_bytes())?;
-        }
-
-        self.commit()?;
+        self.device
+            .send_feature_report(COMMIT_COMMAND)
+            .context("Could not commit the new LED data")?;
 
         Ok(())
     }
 
     fn turn_off(&mut self) -> Result<()> {
-        for segment in &mut self.led_segments {
-            for led in Led::iter() {
-                segment.set_color(led, 0x00, 0x00, 0x00, 0x00);
+        let segments = self.segments();
+
+        for mut segment in segments {
+            for led in LedNumber::iter() {
+                let mut led = segment.get_led(led);
+
+                led.set_color(&Color::from_rgba8(0x00, 0x00, 0x00, 0x00));
+                led.set_brightness(0x00);
             }
 
-            self.inner.send_feature_report(segment.as_bytes())?;
+            segment.commit_segment()?;
         }
 
         self.commit()?;
@@ -144,18 +162,64 @@ impl LmxRpmLeds {
         Ok(())
     }
 
-    pub fn test(&mut self) -> Result<()> {
-        self.turn_off()?;
+    pub fn segments(&mut self) -> impl Iterator<Item = LedSegment> {
+        self.leds.chunks_exact_mut(21).map(|buffer| LedSegment {
+            buffer,
+            device: &self.device,
+        })
+    }
 
-        let mut percentage: u8 = 0;
+    pub fn leds(&mut self) -> impl Iterator<Item = Led> {
+        self.leds
+            .chunks_exact_mut(21)
+            .flat_map(|segment| segment[2..].chunks_exact_mut(LedSegment::BYTES_PER_LED))
+            .map(Led::new)
+    }
 
-        loop {
-            percentage += 1;
-            percentage %= 100;
+    pub fn apply_led_state(&mut self, led_state: &LedState) -> Result<()> {
+        for (mut led, led_config) in self
+            .leds()
+            .skip(led_state.start_led - 1)
+            .zip(&led_state.leds)
+        {
+            let brightness = if led_config.enabled { 0x02 } else { 0x00 };
 
-            self.gradient(percentage)?;
-
-            std::thread::sleep(Duration::from_millis(50));
+            led.set_color(&led_config.color);
+            led.set_brightness(brightness)
         }
+
+        for segment in self.segments() {
+            segment
+                .commit_segment()
+                .context("Could not commit a LED segment while applying a new LED state")?;
+        }
+
+        self.commit()
+            .context("Could not commit the new LED data after applying a new LED state")?;
+
+        Ok(())
+    }
+
+    pub async fn run_led_profile(&mut self, mut led_state: RpmLedState) -> Result<()> {
+        println!(
+            "Running RPM based LED configuration:\n\t{}",
+            led_state.container().description
+        );
+
+        self.turn_off()
+            .context("Could not turn off the RPM LEDs to go back to the initial state")?;
+
+        let mut client = Client::try_connect()
+            .await
+            .context("Could not connect to the Assetto Corsa Competizione SHM file")?;
+
+        while let Some(sim_state) = client.next_sim_state().await {
+            led_state.update(&sim_state);
+
+            self.apply_led_state(led_state.state())
+                .context("Could not apply the new LED state")?;
+        }
+
+        Ok(())
     }
 }

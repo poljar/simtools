@@ -18,8 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#![allow(dead_code)]
-
 use std::num::NonZeroUsize;
 
 use colorgrad::CustomGradient;
@@ -106,6 +104,10 @@ impl RpmLedState {
 
     pub fn state(&self) -> &LedState {
         &self.state
+    }
+
+    pub fn container(&self) -> &RpmContainer {
+        &self.container
     }
 }
 

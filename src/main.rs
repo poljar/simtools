@@ -18,11 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use anyhow::Result;
+use std::{fs::File, io::BufReader, path::PathBuf};
+
+use anyhow::{anyhow, Context as _, Result};
 use cairo::{Format, ImageSurface};
 use clap::{Parser, Subcommand};
 
-use devices::{LmxWheel, USBD480Display};
+use crate::{
+    devices::{LmxWheel, USBD480Display},
+    led_profile::{LedContainer, LedProfile},
+    led_state::RpmLedState,
+};
 
 mod devices;
 mod led_profile;
@@ -41,7 +47,7 @@ enum CliCommand {
     GetConfigValue,
     SetButtonColor { red: u8, green: u8, blue: u8 },
     SetBrightness { brightness: u8 },
-    RpmTest,
+    RpmTest { profile: PathBuf },
 }
 
 fn draw_letter(display: &USBD480Display) -> Result<()> {
@@ -80,7 +86,8 @@ fn draw_letter(display: &USBD480Display) -> Result<()> {
     Ok(())
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let mut lmx = LmxWheel::open()?;
 
     let cli = Cli::parse();
@@ -102,7 +109,28 @@ fn main() -> Result<()> {
         CliCommand::SetButtonColor { red, green, blue } => {
             lmx.buttons().set_color(red, green, blue)?;
         }
-        CliCommand::RpmTest => lmx.rpm_leds_mut().test()?,
+        CliCommand::RpmTest { profile } => {
+            let profile = File::open(profile).context("Couldn't open the LED profile")?;
+            let reader = BufReader::new(profile);
+
+            let profile: LedProfile =
+                serde_json::from_reader(reader).context("Could not deserialize the LED profile")?;
+
+            let led_state = profile
+                .led_containers
+                .into_iter()
+                .find_map(|container| {
+                    if let LedContainer::RpmContainer(c) = container {
+                        let led_state = RpmLedState::new(c);
+                        Some(led_state)
+                    } else {
+                        None
+                    }
+                })
+                .ok_or(anyhow!("Couldn't find any supported LED configuration"))?;
+
+            lmx.rpm_leds_mut().run_led_profile(led_state).await?;
+        }
     }
 
     Ok(())

@@ -206,7 +206,7 @@ impl USBD480Display {
     fn write_to_bulk_endpoint(&self, command: &[u8]) -> Result<usize> {
         Ok(self
             .handle
-            .write_bulk(Self::BULK_ENDPOINT, &command, Self::REQUEST_TIMEOUT)?)
+            .write_bulk(Self::BULK_ENDPOINT, command, Self::REQUEST_TIMEOUT)?)
     }
 
     /// Set the wrap length of the stream decoder to the given length.
@@ -264,13 +264,13 @@ impl USBD480Display {
             command.extend_from_slice(&Self::WRITE_COMMAND.to_le_bytes());
             command.extend_from_slice(&address);
             command.extend_from_slice(&pixel_count.to_le_bytes());
-            command.extend_from_slice(&chunk);
+            command.extend_from_slice(chunk);
 
             self.write_to_bulk_endpoint(&command)?;
 
             command.clear();
 
-            current_address += pixel_count as u32 + 1;
+            current_address += pixel_count + 1;
         }
 
         Ok(())
@@ -348,8 +348,7 @@ impl DrawTarget for USBD480Display {
             .points()
             .zip(colors)
             .filter(|(pos, _)| drawable_area.contains(*pos))
-            .map(|(_, color)| RawU16::from(color).into_inner().to_le_bytes())
-            .flatten();
+            .flat_map(|(_, color)| RawU16::from(color).into_inner().to_le_bytes());
 
         let width = area.size.width as u16;
         let mut current_address = (area.top_left.y as u32 * 480) + area.top_left.x as u32;

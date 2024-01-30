@@ -23,3 +23,6 @@ simetry = { path = "../simetry/" }
 tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread"]}
 uuid = { version = "1.7.0", features = ["serde"] }
 uom = { version = "0.35.0", features = ["serde"] }
+
+[dev-dependencies]
+assert_matches2 = "0.1.2"

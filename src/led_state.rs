@@ -23,7 +23,7 @@ use std::num::NonZeroUsize;
 use colorgrad::CustomGradient;
 use csscolorparser::Color;
 
-use simetry::{assetto_corsa_competizione::SimState, Moment};
+use simetry::Moment;
 use uom::si::ratio::ratio;
 
 use crate::led_profile::rpm::RpmContainer;
@@ -41,7 +41,7 @@ impl RpmLedState {
         }
     }
 
-    pub fn update(&mut self, sim_state: &SimState) {
+    pub fn update(&mut self, sim_state: &dyn Moment) {
         let Some(rpm) = sim_state.vehicle_engine_rotation_speed() else {
             return;
         };
@@ -126,8 +126,271 @@ impl LedState {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct LedConfiguration {
     pub enabled: bool,
     pub color: Color,
+}
+
+#[cfg(test)]
+mod test {
+    use serde_json::json;
+    use uom::si::{angular_velocity::revolution_per_minute, f64::AngularVelocity};
+
+    use super::*;
+
+    struct RpmSimState {
+        rpm: AngularVelocity,
+        max_rpm: AngularVelocity,
+    }
+
+    impl RpmSimState {
+        fn new(rpm: f64, rpm_max: f64) -> Self {
+            Self {
+                rpm: AngularVelocity::new::<revolution_per_minute>(rpm),
+                max_rpm: AngularVelocity::new::<revolution_per_minute>(rpm_max),
+            }
+        }
+
+        fn update_rpm(&mut self, rpm: f64) {
+            self.rpm = AngularVelocity::new::<revolution_per_minute>(rpm);
+        }
+    }
+
+    impl Moment for RpmSimState {
+        fn vehicle_engine_rotation_speed(&self) -> Option<AngularVelocity> {
+            Some(self.rpm)
+        }
+
+        fn vehicle_max_engine_rotation_speed(&self) -> Option<AngularVelocity> {
+            Some(self.max_rpm)
+        }
+    }
+
+    fn container() -> RpmContainer {
+        let container = json!({
+            "UsePercent": true,
+            "PercentMin": 85.0,
+            "PercentMax": 95.0,
+            "RPMMin": 1000.0,
+            "RPMMax": 8000.0,
+            "BlinkDelay": 200,
+            "StartColor": "Lime",
+            "EndColor": "Red",
+            "GradientOnAll": false,
+            "RightToLeft": false,
+            "LedCount": 5,
+            "BlinkEnabled": false,
+            "BlinkOnLastGear": false,
+            "UseLedDimming": false,
+            "FillAllLeds": false,
+            "StartPosition": 1,
+            "ContainerId": "27b0421e-f669-4af6-beba-a90c5aba49a9",
+            "ContainerType": "RPMContainer",
+            "Description": "Turn on LEDs based on the RPM and pick a color on a gradient",
+            "IsEnabled": true
+        });
+
+        serde_json::from_value(container)
+            .expect("We should be able to deserialize the default RPM container")
+    }
+
+    #[test]
+    fn rpm_percentage() {
+        const MAX_RPM: f64 = 9000.0;
+        let container = container();
+        let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
+        let mut rpm_led_state = RpmLedState::new(container);
+
+        assert_eq!(
+            rpm_led_state.state().start_led,
+            1,
+            "We should have correctly configured the start LED"
+        );
+
+        let mut expected_led_configs = vec![LedConfiguration::default(); 5];
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "The initial state should be fully disabled LEDs with default colors"
+        );
+
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            rpm_led_state.state().start_led,
+            1,
+            "Updating the RPM LED state with the new Sim state should not affect the start LED"
+        );
+
+        expected_led_configs[0].color = Color::new(0.0, 1.0, 0.0, 1.0);
+        expected_led_configs[1].color = Color::new(0.25, 0.75, 0.0, 1.0);
+        expected_led_configs[2].color = Color::new(0.5, 0.5, 0.0, 1.0);
+        expected_led_configs[3].color = Color::new(0.75, 0.25, 0.0, 1.0);
+        expected_led_configs[4].color = Color::new(1.0, 0.0, 0.0, 1.0);
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "After the first Sim state update, the LEDs should be properly colorized in a \
+             gradient but they should still be turned off."
+        );
+
+        sim_state.update_rpm(MAX_RPM * 0.85);
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Updating the current RPM to 7650.0, or 85% of the MAX RPM, should not turn any LEDs \
+             on, we only start turning things on *after* 85% of the MAX RPM"
+        );
+
+        sim_state.update_rpm(MAX_RPM * 0.87);
+        rpm_led_state.update(&sim_state);
+        expected_led_configs[0].enabled = true;
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Setting the RPM to 87% of the MAX RPM, should turn the first LED on",
+        );
+
+        sim_state.update_rpm(MAX_RPM * 0.90);
+        rpm_led_state.update(&sim_state);
+        expected_led_configs[1].enabled = true;
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Getting to 0.9 of the MAX RPM should turn on another LED",
+        );
+
+        sim_state.update_rpm(MAX_RPM * 0.95);
+        rpm_led_state.update(&sim_state);
+        expected_led_configs[2].enabled = true;
+        expected_led_configs[3].enabled = true;
+        expected_led_configs[4].enabled = true;
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Getting to 0.95 of the MAX RPM should turn on all LEDs",
+        );
+
+        sim_state.update_rpm(MAX_RPM * 0.10);
+        rpm_led_state.update(&sim_state);
+        expected_led_configs[0].enabled = false;
+        expected_led_configs[1].enabled = false;
+        expected_led_configs[2].enabled = false;
+        expected_led_configs[3].enabled = false;
+        expected_led_configs[4].enabled = false;
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Going back to 0.1 of the max RPM should turn the LEDs back off",
+        );
+    }
+
+    #[test]
+    fn rpm_values() {
+        const MAX_RPM: f64 = 9000.0;
+        let mut container = container();
+        container.use_percent = false;
+
+        let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
+        let mut rpm_led_state = RpmLedState::new(container);
+
+        assert_eq!(
+            rpm_led_state.state().start_led,
+            1,
+            "We should have correctly configured the start LED"
+        );
+        let mut expected_led_configs = vec![LedConfiguration::default(); 5];
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "The initial state should be fully disabled LEDs with default colors"
+        );
+
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            rpm_led_state.state().start_led,
+            1,
+            "Updating the RPM LED state with the new Sim state should not affect the start LED"
+        );
+
+        expected_led_configs[0].color = Color::new(0.0, 1.0, 0.0, 1.0);
+        expected_led_configs[1].color = Color::new(0.25, 0.75, 0.0, 1.0);
+        expected_led_configs[2].color = Color::new(0.5, 0.5, 0.0, 1.0);
+        expected_led_configs[3].color = Color::new(0.75, 0.25, 0.0, 1.0);
+        expected_led_configs[4].color = Color::new(1.0, 0.0, 0.0, 1.0);
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "After the first Sim state update, the LEDs should be properly colorized in a \
+             gradient but they should still be turned off."
+        );
+
+        sim_state.update_rpm(1000.0);
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Updating the current RPM to 1000, or to the of the MIN RPM setting, should not turn \
+             any LEDs on, we only start turning things on *after* the MIN RPM setting"
+        );
+
+        sim_state.update_rpm(2400.0);
+        rpm_led_state.update(&sim_state);
+        expected_led_configs[0].enabled = true;
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Setting the RPM to 2400 RPM, should turn the first LED on",
+        );
+
+        sim_state.update_rpm(3850.0);
+        rpm_led_state.update(&sim_state);
+        expected_led_configs[1].enabled = true;
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Getting to 3850 RPM should turn on another LED",
+        );
+
+        sim_state.update_rpm(8000.0);
+        rpm_led_state.update(&sim_state);
+        expected_led_configs[2].enabled = true;
+        expected_led_configs[3].enabled = true;
+        expected_led_configs[4].enabled = true;
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Getting to 8000 RPM should turn on all LEDs",
+        );
+
+        sim_state.update_rpm(1000.0);
+        rpm_led_state.update(&sim_state);
+        expected_led_configs[0].enabled = false;
+        expected_led_configs[1].enabled = false;
+        expected_led_configs[2].enabled = false;
+        expected_led_configs[3].enabled = false;
+        expected_led_configs[4].enabled = false;
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Going back to 1000 RPM should turn the LEDs back off",
+        );
+    }
 }

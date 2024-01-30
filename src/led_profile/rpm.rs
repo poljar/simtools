@@ -78,14 +78,15 @@ pub struct RpmContainer {
     /// Should the LEDs be filled out from right to left instead of the usual left to right
     /// direction?
     pub right_to_left: bool,
+    /// Should the LEDs blink when the maximum RPM of the car is reached, the so called redline.
+    /// This is not the [`RpmContainer::rpm_max`] setting, the maximum RPM of the car is defined by
+    /// the simulator.
+    pub blink_enabled: bool,
     /// How long should the LED stay on and off when blinking, in other words how long do we wait
     /// before we change the state of the LED.
     #[serde(deserialize_with = "duration_from_int_ms")]
     pub blink_delay: Duration,
-    /// Should the LEDs blink when the maximum RPM or percentage of it are reached.
-    pub blink_enabled: bool,
-    /// Should the LEDs only (or as well?) blink when the maximum RPM or percentage of it are
-    /// reached in the last gear?
+    /// Should the LEDs also blink when the maximum RPM is reached in the last gear?
     pub blink_on_last_gear: bool,
     /// TODO: What does this setting do?
     pub use_led_dimming: bool,

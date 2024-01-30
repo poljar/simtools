@@ -73,8 +73,6 @@ pub struct RpmContainer {
     /// The final color in the gradient.
     #[serde(deserialize_with = "color_from_str")]
     pub end_color: Color,
-    /// TODO: I don't know what this means.
-    pub gradient_on_all: bool,
     /// Should the LEDs be filled out from right to left instead of the usual left to right
     /// direction?
     pub right_to_left: bool,
@@ -90,7 +88,11 @@ pub struct RpmContainer {
     pub blink_on_last_gear: bool,
     /// TODO: What does this setting do?
     pub use_led_dimming: bool,
-    /// TODO: What does this setting do?
+    /// Should the same color, the one that is furthest on the gradient and enabled because of the
+    /// RPM value, be used for all the currently active LEDs?
+    pub gradient_on_all: bool,
+    /// Should all the LEDs be turned on from the start, only the colors will differ based on the
+    /// RPM. This only works in conjunction with the [`RpmContainer::gradient_on_all`] setting.
     pub fill_all_leds: bool,
 }
 

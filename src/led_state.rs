@@ -69,6 +69,7 @@ pub enum BlinkState {
     },
 }
 
+// TODO: Support LED dimming, aka the [`RpmContainer::use_led_dimming`] setting.
 impl RpmLedState {
     pub fn new(container: RpmContainer) -> Self {
         Self {
@@ -107,6 +108,7 @@ impl RpmLedState {
     pub fn calculate_next_blink_state(&self, sim_state: &dyn Moment) -> BlinkState {
         let redline_reached = sim_state.redline_reached();
         let blink_enabled = self.container.blink_enabled;
+
         let blink = if self.container.blink_on_last_gear {
             true
         } else {
@@ -174,11 +176,30 @@ impl RpmLedState {
             };
 
         for (led_number, led) in led_iterator.enumerate() {
-            let color = gradient.at(led_number as f64);
+            // If we're using the [`RpmContainer::gradient_on_all`] setting, we're going to pick
+            // the color of the active LED that is rightmost on the gradient for all LEDs,
+            // otherwise, each LED will get their color from the position on the gradient.
+            let gradient_position = if self.container.gradient_on_all {
+                leds_to_turn_on
+            } else {
+                led_number
+            };
+
+            let color = gradient.at(gradient_position as f64);
 
             led.color = color;
             led.enabled = match next_blink_state {
-                BlinkState::NotBlinking => led_number < leds_to_turn_on,
+                BlinkState::NotBlinking => {
+                    // If the [`RpmContainer::gradient_on_all`] and [`RpmContainer::fill_all_leds`]
+                    // settings are on, then all LEDs will be turned on and only the color of the
+                    // LEDs will change. Otherwise, only the LEDs that match a certain RPM value
+                    // will be turned on.
+                    if self.container.gradient_on_all && self.container.fill_all_leds {
+                        true
+                    } else {
+                        led_number < leds_to_turn_on
+                    }
+                }
                 BlinkState::LedsTurnedOff { .. } => false,
                 BlinkState::LedsTurnedOn { .. } => true,
             }
@@ -476,6 +497,101 @@ mod test {
             expected_led_configs,
             rpm_led_state.state().leds,
             "Going back to 1000 RPM should turn the LEDs back off",
+        );
+    }
+
+    #[test]
+    fn rpm_gradient_on_all() {
+        const MAX_RPM: f64 = 9000.0;
+        let mut container = container();
+        container.use_percent = false;
+        container.gradient_on_all = true;
+
+        let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
+        let mut rpm_led_state = RpmLedState::new(container);
+
+        rpm_led_state.update(&sim_state);
+
+        // The [`gradient_on_all`] setting ensures that all LEDs have the same color.
+        let mut expected_led_configs = vec![
+            LedConfiguration {
+                enabled: false,
+                color: Color::new(0.5, 0.5, 0.0, 1.0),
+            };
+            5
+        ];
+
+        expected_led_configs[0].enabled = true;
+        expected_led_configs[1].enabled = true;
+
+        sim_state.update_rpm(3850.0);
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Setting the RPM to 3850.0 should turn on two LEDs and they both should have a yellow \
+             color",
+        );
+
+        for expected_led in &mut expected_led_configs {
+            expected_led.enabled = true;
+            expected_led.color = Color::new(1.0, 0.0, 0.0, 1.0);
+        }
+
+        sim_state.update_rpm(8000.0);
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Setting the RPM to 8000.0 should turn on all LEDs and have all of them be red",
+        );
+    }
+
+    #[test]
+    fn rpm_gradient_on_all_and_fill_all_leds() {
+        const MAX_RPM: f64 = 9000.0;
+        let mut container = container();
+        container.use_percent = false;
+        container.gradient_on_all = true;
+        container.fill_all_leds = true;
+
+        let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
+        let mut rpm_led_state = RpmLedState::new(container);
+
+        rpm_led_state.update(&sim_state);
+
+        // The [`gradient_on_all`] setting ensures that all LEDs have the same color.
+        let mut expected_led_configs = vec![
+            LedConfiguration {
+                enabled: true,
+                color: Color::new(0.5, 0.5, 0.0, 1.0),
+            };
+            5
+        ];
+
+        sim_state.update_rpm(3850.0);
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Setting the RPM to 3850.0 should turn on all LEDs and they should have a yellow color",
+        );
+
+        for expected_led in &mut expected_led_configs {
+            expected_led.enabled = true;
+            expected_led.color = Color::new(1.0, 0.0, 0.0, 1.0);
+        }
+
+        sim_state.update_rpm(8000.0);
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            expected_led_configs,
+            rpm_led_state.state().leds,
+            "Setting the RPM to 8000.0 should set the collor on all LEDs to red",
         );
     }
 }

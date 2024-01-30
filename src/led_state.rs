@@ -20,7 +20,7 @@
 
 use std::{num::NonZeroUsize, time::Instant};
 
-use colorgrad::CustomGradient;
+use colorgrad::{CustomGradient, Gradient};
 use csscolorparser::Color;
 
 use simetry::Moment;
@@ -53,6 +53,7 @@ impl<T> MomentExt for T where T: Moment + ?Sized {}
 #[derive(Debug)]
 pub struct RpmLedState {
     container: RpmContainer,
+    gradient: Gradient,
     state: LedState,
     blink_state: BlinkState,
 }
@@ -72,8 +73,20 @@ pub enum BlinkState {
 // TODO: Support LED dimming, aka the [`RpmContainer::use_led_dimming`] setting.
 impl RpmLedState {
     pub fn new(container: RpmContainer) -> Self {
+        let led_count = container.led_count.get();
+
+        let gradient = CustomGradient::new()
+            .colors(&[container.start_color.clone(), container.end_color.clone()])
+            .domain(&[0.0, (led_count - 1) as f64])
+            .build()
+            .expect(
+                "We should always be able to create a gradient from two parsed Color \
+                 types and a domain that's guaranteed to be at lest 0 -> 0",
+            );
+
         Self {
             state: LedState::new(container.start_position, container.led_count),
+            gradient,
             blink_state: Default::default(),
             container,
         }
@@ -153,18 +166,6 @@ impl RpmLedState {
             return;
         };
 
-        let led_count = self.state.leds.len();
-
-        // TODO: How do we remove this unwrap? I think we can replace it with an except.
-        let gradient = CustomGradient::new()
-            .colors(&[
-                self.container.start_color.clone(),
-                self.container.end_color.clone(),
-            ])
-            .domain(&[0.0, (led_count - 1) as f64])
-            .build()
-            .unwrap();
-
         let next_blink_state = self.calculate_next_blink_state(sim_state);
         let leds_to_turn_on = self.calculate_how_many_leds_to_turn_on(rpm, max_rpm);
 
@@ -185,9 +186,8 @@ impl RpmLedState {
                 led_number
             };
 
-            let color = gradient.at(gradient_position as f64);
+            led.color = self.gradient.at(gradient_position as f64);
 
-            led.color = color;
             led.enabled = match next_blink_state {
                 BlinkState::NotBlinking => {
                     // If the [`RpmContainer::gradient_on_all`] and [`RpmContainer::fill_all_leds`]

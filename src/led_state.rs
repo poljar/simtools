@@ -18,26 +18,128 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::num::NonZeroUsize;
+use std::{num::NonZeroUsize, time::Instant};
 
 use colorgrad::CustomGradient;
 use csscolorparser::Color;
 
 use simetry::Moment;
-use uom::si::ratio::ratio;
+use uom::si::{f64::AngularVelocity, ratio::ratio};
 
 use crate::led_profile::rpm::RpmContainer;
 
+pub trait MomentExt: Moment {
+    fn redline_reached(&self) -> bool {
+        const ERROR_MARGIN_PERCENTAGE: f64 = 0.02;
+
+        let Some(rpm) = self.vehicle_engine_rotation_speed() else {
+            return false;
+        };
+
+        let Some(max_rpm) = self.vehicle_max_engine_rotation_speed() else {
+            return false;
+        };
+
+        let error_margin = ERROR_MARGIN_PERCENTAGE * max_rpm;
+
+        // If we're within 2% of the MAX RPM of a car, we're going to consider this to be at
+        // the redline.
+        (max_rpm - rpm).abs() < error_margin
+    }
+}
+
+impl<T> MomentExt for T where T: Moment + ?Sized {}
+
+#[derive(Debug)]
 pub struct RpmLedState {
     container: RpmContainer,
     state: LedState,
+    blink_state: BlinkState,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub enum BlinkState {
+    #[default]
+    NotBlinking,
+    LedsTurnedOff {
+        state_change: Instant,
+    },
+    LedsTurnedOn {
+        state_change: Instant,
+    },
 }
 
 impl RpmLedState {
     pub fn new(container: RpmContainer) -> Self {
         Self {
             state: LedState::new(container.start_position, container.led_count),
+            blink_state: Default::default(),
             container,
+        }
+    }
+
+    fn calculate_how_many_leds_to_turn_on(
+        &self,
+        rpm: AngularVelocity,
+        max_rpm: AngularVelocity,
+    ) -> usize {
+        let led_count = self.state.leds.len();
+
+        let percentage_of_leds_to_turn_on = if self.container.use_percent {
+            let rpm_percentage = rpm / max_rpm * 100.0;
+
+            let percentage_min = self.container.percent_min;
+            let percentage_max = self.container.percent_max;
+
+            (rpm_percentage - percentage_min) / (percentage_max - percentage_min)
+        } else {
+            let rpm_min = self.container.rpm_min;
+            let rpm_max = self.container.rpm_max;
+
+            (rpm - rpm_min) / (rpm_max - rpm_min)
+        };
+
+        (percentage_of_leds_to_turn_on * led_count as f64)
+            .floor::<ratio>()
+            .get::<ratio>() as usize
+    }
+
+    pub fn calculate_next_blink_state(&self, sim_state: &dyn Moment) -> BlinkState {
+        let redline_reached = sim_state.redline_reached();
+        let blink_enabled = self.container.blink_enabled;
+        let blink = if self.container.blink_on_last_gear {
+            true
+        } else {
+            // TODO: How do we figure out what max gear the car supports?
+            sim_state.vehicle_gear() != Some(6)
+        };
+
+        if redline_reached && blink_enabled && blink {
+            match &self.blink_state {
+                BlinkState::NotBlinking => BlinkState::LedsTurnedOn {
+                    state_change: Instant::now(),
+                },
+                BlinkState::LedsTurnedOff { state_change } => {
+                    if state_change.elapsed() >= self.container.blink_delay {
+                        BlinkState::LedsTurnedOn {
+                            state_change: Instant::now(),
+                        }
+                    } else {
+                        self.blink_state
+                    }
+                }
+                BlinkState::LedsTurnedOn { state_change } => {
+                    if state_change.elapsed() >= self.container.blink_delay {
+                        BlinkState::LedsTurnedOff {
+                            state_change: Instant::now(),
+                        }
+                    } else {
+                        self.blink_state
+                    }
+                }
+            }
+        } else {
+            BlinkState::NotBlinking
         }
     }
 
@@ -51,6 +153,7 @@ impl RpmLedState {
 
         let led_count = self.state.leds.len();
 
+        // TODO: How do we remove this unwrap? I think we can replace it with an except.
         let gradient = CustomGradient::new()
             .colors(&[
                 self.container.start_color.clone(),
@@ -60,32 +163,8 @@ impl RpmLedState {
             .build()
             .unwrap();
 
-        let (percentage_of_leds_to_turn_on, _should_blink) = if self.container.use_percent {
-            let rpm_percentage = rpm / max_rpm * 100.0;
-
-            let percentage_min = self.container.percent_min;
-            let percentage_max = self.container.percent_max;
-
-            let should_blink = rpm_percentage >= percentage_max;
-
-            let leds_to_turn_on =
-                (rpm_percentage - percentage_min) / (percentage_max - percentage_min);
-
-            (leds_to_turn_on, should_blink)
-        } else {
-            let rpm_min = self.container.rpm_min;
-            let rpm_max = self.container.rpm_max;
-
-            let should_blink = rpm >= rpm_max;
-
-            let leds_to_turn_on = (rpm - rpm_min) / (rpm_max - rpm_min);
-
-            (leds_to_turn_on, should_blink)
-        };
-
-        let leds_to_turn_on = (percentage_of_leds_to_turn_on * led_count as f64)
-            .floor::<ratio>()
-            .get::<ratio>() as usize;
+        let next_blink_state = self.calculate_next_blink_state(sim_state);
+        let leds_to_turn_on = self.calculate_how_many_leds_to_turn_on(rpm, max_rpm);
 
         let led_iterator: Box<dyn Iterator<Item = &mut LedConfiguration>> =
             if self.container.right_to_left {
@@ -98,8 +177,14 @@ impl RpmLedState {
             let color = gradient.at(led_number as f64);
 
             led.color = color;
-            led.enabled = led_number < leds_to_turn_on;
+            led.enabled = match next_blink_state {
+                BlinkState::NotBlinking => led_number < leds_to_turn_on,
+                BlinkState::LedsTurnedOff { .. } => false,
+                BlinkState::LedsTurnedOn { .. } => true,
+            }
         }
+
+        self.blink_state = next_blink_state;
     }
 
     pub fn state(&self) -> &LedState {

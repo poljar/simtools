@@ -24,7 +24,7 @@ use hidapi::{HidApi, HidDevice};
 use simetry::assetto_corsa_competizione::Client;
 use strum::{EnumIter, IntoEnumIterator};
 
-use crate::led_state::{LedState, RpmLedState};
+use crate::led_state::{rpm_gradient::RpmLedState, LedState};
 
 pub struct LmxRpmLeds {
     device: HidDevice,
@@ -176,12 +176,8 @@ impl LmxRpmLeds {
             .map(Led::new)
     }
 
-    pub fn apply_led_state(&mut self, led_state: &LedState) -> Result<()> {
-        for (mut led, led_config) in self
-            .leds()
-            .skip(led_state.start_led - 1)
-            .zip(&led_state.leds)
-        {
+    pub fn apply_led_state(&mut self, start_led: usize, led_state: &LedState) -> Result<()> {
+        for (mut led, led_config) in self.leds().skip(start_led - 1).zip(&led_state.leds) {
             let brightness = if led_config.enabled { 0x02 } else { 0x00 };
 
             led.set_color(&led_config.color);
@@ -216,7 +212,7 @@ impl LmxRpmLeds {
         while let Some(sim_state) = client.next_sim_state().await {
             led_state.update(&sim_state);
 
-            self.apply_led_state(led_state.state())
+            self.apply_led_state(led_state.container().start_position, led_state.state())
                 .context("Could not apply the new LED state")?;
         }
 

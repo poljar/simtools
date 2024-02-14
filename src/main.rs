@@ -27,7 +27,7 @@ use clap::{Parser, Subcommand};
 use crate::{
     devices::{LmxWheel, USBD480Display},
     led_profile::{LedContainer, LedProfile},
-    led_state::RpmLedState,
+    led_state::rpm_gradient::RpmLedState,
 };
 
 mod devices;

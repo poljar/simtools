@@ -18,37 +18,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{num::NonZeroUsize, time::Instant};
-
 use colorgrad::{CustomGradient, Gradient};
-use csscolorparser::Color;
-
 use simetry::Moment;
+use std::time::Instant;
 use uom::si::{f64::AngularVelocity, ratio::ratio};
 
+use super::{BlinkState, LedConfiguration, LedState, MomentExt};
 use crate::led_profile::rpm::RpmContainer;
 
-pub trait MomentExt: Moment {
-    fn redline_reached(&self) -> bool {
-        const ERROR_MARGIN_PERCENTAGE: f64 = 0.02;
-
-        let Some(rpm) = self.vehicle_engine_rotation_speed() else {
-            return false;
-        };
-
-        let Some(max_rpm) = self.vehicle_max_engine_rotation_speed() else {
-            return false;
-        };
-
-        let error_margin = ERROR_MARGIN_PERCENTAGE * max_rpm;
-
-        // If we're within 2% of the MAX RPM of a car, we're going to consider this to be at
-        // the redline.
-        (max_rpm - rpm).abs() < error_margin
-    }
-}
-
-impl<T> MomentExt for T where T: Moment + ?Sized {}
+// TODO: Support LED dimming, aka the [`RpmContainer::use_led_dimming`] setting.
 
 #[derive(Debug)]
 pub struct RpmLedState {
@@ -58,19 +36,6 @@ pub struct RpmLedState {
     blink_state: BlinkState,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
-pub enum BlinkState {
-    #[default]
-    NotBlinking,
-    LedsTurnedOff {
-        state_change: Instant,
-    },
-    LedsTurnedOn {
-        state_change: Instant,
-    },
-}
-
-// TODO: Support LED dimming, aka the [`RpmContainer::use_led_dimming`] setting.
 impl RpmLedState {
     pub fn new(container: RpmContainer) -> Self {
         let led_count = container.led_count.get();
@@ -85,7 +50,7 @@ impl RpmLedState {
             );
 
         Self {
-            state: LedState::new(container.start_position, container.led_count),
+            state: LedState::new(container.led_count),
             gradient,
             blink_state: Default::default(),
             container,
@@ -118,7 +83,7 @@ impl RpmLedState {
             .get::<ratio>() as usize
     }
 
-    pub fn calculate_next_blink_state(&self, sim_state: &dyn Moment) -> BlinkState {
+    fn calculate_next_blink_state(&self, sim_state: &dyn Moment) -> BlinkState {
         let redline_reached = sim_state.redline_reached();
         let blink_enabled = self.container.blink_enabled;
 
@@ -217,29 +182,9 @@ impl RpmLedState {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct LedState {
-    pub start_led: usize,
-    pub leds: Vec<LedConfiguration>,
-}
-
-impl LedState {
-    pub fn new(start_led: usize, led_count: NonZeroUsize) -> Self {
-        Self {
-            start_led,
-            leds: vec![LedConfiguration::default(); led_count.get()],
-        }
-    }
-}
-
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct LedConfiguration {
-    pub enabled: bool,
-    pub color: Color,
-}
-
 #[cfg(test)]
 mod test {
+    use csscolorparser::Color;
     use serde_json::json;
     use uom::si::{angular_velocity::revolution_per_minute, f64::AngularVelocity};
 
@@ -308,12 +253,6 @@ mod test {
         let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
         let mut rpm_led_state = RpmLedState::new(container);
 
-        assert_eq!(
-            rpm_led_state.state().start_led,
-            1,
-            "We should have correctly configured the start LED"
-        );
-
         let mut expected_led_configs = vec![LedConfiguration::default(); 5];
 
         assert_eq!(
@@ -323,12 +262,6 @@ mod test {
         );
 
         rpm_led_state.update(&sim_state);
-
-        assert_eq!(
-            rpm_led_state.state().start_led,
-            1,
-            "Updating the RPM LED state with the new Sim state should not affect the start LED"
-        );
 
         expected_led_configs[0].color = Color::new(0.0, 1.0, 0.0, 1.0);
         expected_led_configs[1].color = Color::new(0.25, 0.75, 0.0, 1.0);
@@ -409,11 +342,6 @@ mod test {
         let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
         let mut rpm_led_state = RpmLedState::new(container);
 
-        assert_eq!(
-            rpm_led_state.state().start_led,
-            1,
-            "We should have correctly configured the start LED"
-        );
         let mut expected_led_configs = vec![LedConfiguration::default(); 5];
 
         assert_eq!(
@@ -423,12 +351,6 @@ mod test {
         );
 
         rpm_led_state.update(&sim_state);
-
-        assert_eq!(
-            rpm_led_state.state().start_led,
-            1,
-            "Updating the RPM LED state with the new Sim state should not affect the start LED"
-        );
 
         expected_led_configs[0].color = Color::new(0.0, 1.0, 0.0, 1.0);
         expected_led_configs[1].color = Color::new(0.25, 0.75, 0.0, 1.0);

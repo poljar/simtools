@@ -23,6 +23,7 @@ use std::{num::NonZeroUsize, time::Instant};
 
 use simetry::Moment;
 
+pub mod flag;
 pub mod rpm_gradient;
 
 pub trait LedFoo {

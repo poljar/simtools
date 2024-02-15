@@ -24,7 +24,7 @@ use simetry::Moment;
 
 use crate::led_profile::flag::FlagContainer;
 
-use super::{BlinkState, LedState};
+use super::{BlinkState, LedConfiguration, LedState};
 
 pub enum FlagColor {
     White,
@@ -43,7 +43,7 @@ impl FlagLedState {
     pub fn new(flag_color: FlagColor, container: FlagContainer) -> Self {
         let led_count = container.led_count;
 
-        let state = LedState::with_color(led_count, container.color.clone());
+        let state = LedState::with_color(container.color.clone(), led_count);
 
         Self {
             flag_color,
@@ -115,7 +115,13 @@ impl FlagLedState {
                 BlinkState::LedsTurnedOn { .. } => true,
             };
 
-            led.enabled = led_enabled;
+            *led = if led_enabled {
+                LedConfiguration::On {
+                    color: self.container.color.clone(),
+                }
+            } else {
+                LedConfiguration::Off
+            };
         }
 
         self.blink_state = next_blink_state;

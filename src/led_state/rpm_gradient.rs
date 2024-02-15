@@ -151,9 +151,7 @@ impl RpmLedState {
                 led_number
             };
 
-            led.color = self.gradient.at(gradient_position as f64);
-
-            led.enabled = match next_blink_state {
+            let enabled = match next_blink_state {
                 BlinkState::NotBlinking => {
                     // If the [`RpmContainer::gradient_on_all`] and [`RpmContainer::fill_all_leds`]
                     // settings are on, then all LEDs will be turned on and only the color of the
@@ -167,7 +165,14 @@ impl RpmLedState {
                 }
                 BlinkState::LedsTurnedOff { .. } => false,
                 BlinkState::LedsTurnedOn { .. } => true,
-            }
+            };
+
+            *led = if enabled {
+                let color = self.gradient.at(gradient_position as f64);
+                LedConfiguration::On { color }
+            } else {
+                LedConfiguration::Off
+            };
         }
 
         self.blink_state = next_blink_state;
@@ -187,6 +192,8 @@ mod test {
     use csscolorparser::Color;
     use serde_json::json;
     use uom::si::{angular_velocity::revolution_per_minute, f64::AngularVelocity};
+
+    use crate::{led, leds};
 
     use super::*;
 
@@ -253,82 +260,69 @@ mod test {
         let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
         let mut rpm_led_state = RpmLedState::new(container);
 
-        let mut expected_led_configs = vec![LedConfiguration::default(); 5];
-
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds![off; 5],
+            rpm_led_state.state(),
             "The initial state should be fully disabled LEDs with default colors"
         );
 
         rpm_led_state.update(&sim_state);
 
-        expected_led_configs[0].color = Color::new(0.0, 1.0, 0.0, 1.0);
-        expected_led_configs[1].color = Color::new(0.25, 0.75, 0.0, 1.0);
-        expected_led_configs[2].color = Color::new(0.5, 0.5, 0.0, 1.0);
-        expected_led_configs[3].color = Color::new(0.75, 0.25, 0.0, 1.0);
-        expected_led_configs[4].color = Color::new(1.0, 0.0, 0.0, 1.0);
-
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
-            "After the first Sim state update, the LEDs should be properly colorized in a \
-             gradient but they should still be turned off."
+            &leds![off; 5],
+            rpm_led_state.state(),
+            "After the first Sim state update, the LEDs should still be turned off."
         );
 
         sim_state.update_rpm(MAX_RPM * 0.85);
         rpm_led_state.update(&sim_state);
 
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds![off; 5],
+            rpm_led_state.state(),
             "Updating the current RPM to 7650.0, or 85% of the MAX RPM, should not turn any LEDs \
              on, we only start turning things on *after* 85% of the MAX RPM"
         );
 
         sim_state.update_rpm(MAX_RPM * 0.87);
         rpm_led_state.update(&sim_state);
-        expected_led_configs[0].enabled = true;
 
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds!["lime", off, off, off, off],
+            rpm_led_state.state(),
             "Setting the RPM to 87% of the MAX RPM, should turn the first LED on",
         );
 
         sim_state.update_rpm(MAX_RPM * 0.90);
         rpm_led_state.update(&sim_state);
-        expected_led_configs[1].enabled = true;
 
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds!["lime", (0.25, 0.75, 0.0), off, off, off],
+            rpm_led_state.state(),
             "Getting to 0.9 of the MAX RPM should turn on another LED",
         );
 
         sim_state.update_rpm(MAX_RPM * 0.95);
         rpm_led_state.update(&sim_state);
-        expected_led_configs[2].enabled = true;
-        expected_led_configs[3].enabled = true;
-        expected_led_configs[4].enabled = true;
 
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds![
+                "lime",
+                (0.25, 0.75, 0.0),
+                (0.5, 0.5, 0.0),
+                (0.75, 0.25, 0.0),
+                "red"
+            ],
+            rpm_led_state.state(),
             "Getting to 0.95 of the MAX RPM should turn on all LEDs",
         );
 
         sim_state.update_rpm(MAX_RPM * 0.10);
         rpm_led_state.update(&sim_state);
-        expected_led_configs[0].enabled = false;
-        expected_led_configs[1].enabled = false;
-        expected_led_configs[2].enabled = false;
-        expected_led_configs[3].enabled = false;
-        expected_led_configs[4].enabled = false;
 
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds![off; 5],
+            rpm_led_state.state(),
             "Going back to 0.1 of the max RPM should turn the LEDs back off",
         );
     }
@@ -342,82 +336,69 @@ mod test {
         let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
         let mut rpm_led_state = RpmLedState::new(container);
 
-        let mut expected_led_configs = vec![LedConfiguration::default(); 5];
-
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds![off; 5],
+            rpm_led_state.state(),
             "The initial state should be fully disabled LEDs with default colors"
         );
 
         rpm_led_state.update(&sim_state);
 
-        expected_led_configs[0].color = Color::new(0.0, 1.0, 0.0, 1.0);
-        expected_led_configs[1].color = Color::new(0.25, 0.75, 0.0, 1.0);
-        expected_led_configs[2].color = Color::new(0.5, 0.5, 0.0, 1.0);
-        expected_led_configs[3].color = Color::new(0.75, 0.25, 0.0, 1.0);
-        expected_led_configs[4].color = Color::new(1.0, 0.0, 0.0, 1.0);
-
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
-            "After the first Sim state update, the LEDs should be properly colorized in a \
-             gradient but they should still be turned off."
+            &leds![off; 5],
+            rpm_led_state.state(),
+            "After the first Sim state update, the LEDs should still be off",
         );
 
         sim_state.update_rpm(1000.0);
         rpm_led_state.update(&sim_state);
 
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds![off; 5],
+            rpm_led_state.state(),
             "Updating the current RPM to 1000, or to the of the MIN RPM setting, should not turn \
              any LEDs on, we only start turning things on *after* the MIN RPM setting"
         );
 
         sim_state.update_rpm(2400.0);
         rpm_led_state.update(&sim_state);
-        expected_led_configs[0].enabled = true;
 
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds!["lime", off, off, off, off],
+            rpm_led_state.state(),
             "Setting the RPM to 2400 RPM, should turn the first LED on",
         );
 
         sim_state.update_rpm(3850.0);
         rpm_led_state.update(&sim_state);
-        expected_led_configs[1].enabled = true;
 
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds!["lime", (0.25, 0.75, 0.0), off, off, off],
+            rpm_led_state.state(),
             "Getting to 3850 RPM should turn on another LED",
         );
 
         sim_state.update_rpm(8000.0);
         rpm_led_state.update(&sim_state);
-        expected_led_configs[2].enabled = true;
-        expected_led_configs[3].enabled = true;
-        expected_led_configs[4].enabled = true;
 
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds![
+                "lime",
+                (0.25, 0.75, 0.0),
+                (0.5, 0.5, 0.0),
+                (0.75, 0.25, 0.0),
+                "red"
+            ],
+            rpm_led_state.state(),
             "Getting to 8000 RPM should turn on all LEDs",
         );
 
         sim_state.update_rpm(1000.0);
         rpm_led_state.update(&sim_state);
-        expected_led_configs[0].enabled = false;
-        expected_led_configs[1].enabled = false;
-        expected_led_configs[2].enabled = false;
-        expected_led_configs[3].enabled = false;
-        expected_led_configs[4].enabled = false;
 
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds![off; 5],
+            rpm_led_state.state(),
             "Going back to 1000 RPM should turn the LEDs back off",
         );
     }
@@ -432,41 +413,23 @@ mod test {
         let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
         let mut rpm_led_state = RpmLedState::new(container);
 
-        rpm_led_state.update(&sim_state);
-
-        // The [`gradient_on_all`] setting ensures that all LEDs have the same color.
-        let mut expected_led_configs = vec![
-            LedConfiguration {
-                enabled: false,
-                color: Color::new(0.5, 0.5, 0.0, 1.0),
-            };
-            5
-        ];
-
-        expected_led_configs[0].enabled = true;
-        expected_led_configs[1].enabled = true;
-
         sim_state.update_rpm(3850.0);
         rpm_led_state.update(&sim_state);
 
+        // The [`gradient_on_all`] setting ensures that all enabled LEDs have the same color.
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds![(0.5, 0.5, 0.0), (0.5, 0.5, 0.0), off, off, off],
+            rpm_led_state.state(),
             "Setting the RPM to 3850.0 should turn on two LEDs and they both should have a yellow \
              color",
         );
-
-        for expected_led in &mut expected_led_configs {
-            expected_led.enabled = true;
-            expected_led.color = Color::new(1.0, 0.0, 0.0, 1.0);
-        }
 
         sim_state.update_rpm(8000.0);
         rpm_led_state.update(&sim_state);
 
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds!["red"; 5],
+            rpm_led_state.state(),
             "Setting the RPM to 8000.0 should turn on all LEDs and have all of them be red",
         );
     }
@@ -482,37 +445,23 @@ mod test {
         let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
         let mut rpm_led_state = RpmLedState::new(container);
 
-        rpm_led_state.update(&sim_state);
-
-        // The [`gradient_on_all`] setting ensures that all LEDs have the same color.
-        let mut expected_led_configs = vec![
-            LedConfiguration {
-                enabled: true,
-                color: Color::new(0.5, 0.5, 0.0, 1.0),
-            };
-            5
-        ];
-
         sim_state.update_rpm(3850.0);
         rpm_led_state.update(&sim_state);
 
+        // The `gradient_on_all` setting ensures that all LEDs have the same color and the
+        // `fill_all_leds` setting enables them all.
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds![(0.5, 0.5, 0.0); 5],
+            rpm_led_state.state(),
             "Setting the RPM to 3850.0 should turn on all LEDs and they should have a yellow color",
         );
-
-        for expected_led in &mut expected_led_configs {
-            expected_led.enabled = true;
-            expected_led.color = Color::new(1.0, 0.0, 0.0, 1.0);
-        }
 
         sim_state.update_rpm(8000.0);
         rpm_led_state.update(&sim_state);
 
         assert_eq!(
-            expected_led_configs,
-            rpm_led_state.state().leds,
+            &leds!["red"; 5],
+            rpm_led_state.state(),
             "Setting the RPM to 8000.0 should set the collor on all LEDs to red",
         );
     }

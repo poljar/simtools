@@ -79,22 +79,56 @@ impl LedState {
         }
     }
 
-    pub fn with_color(led_count: NonZeroUsize, color: Color) -> Self {
+    pub fn with_color(color: Color, led_count: NonZeroUsize) -> Self {
         Self {
-            leds: vec![
-                LedConfiguration {
-                    enabled: false,
-                    color
-                };
-                led_count.get()
-            ],
+            leds: vec![LedConfiguration::On { color }; led_count.get()],
         }
     }
 }
 
 // TODO: This should be an enum with On/Off variants.
 #[derive(Debug, Default, Clone, PartialEq)]
-pub struct LedConfiguration {
-    pub enabled: bool,
-    pub color: Color,
+pub enum LedConfiguration {
+    On {
+        color: Color,
+    },
+    #[default]
+    Off,
+}
+
+#[cfg(test)]
+mod test {
+    #[macro_export]
+    macro_rules! led {
+        (off) => {
+            LedConfiguration::Off
+        };
+        (($r:expr, $g:expr, $b:expr)) => {
+            LedConfiguration::On {
+                color: Color::new($r, $g, $b, 1.0),
+            }
+        };
+        ($color:expr) => {
+            LedConfiguration::On {
+                color: Color::from_html($color).unwrap(),
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! leds {
+        ($color:tt; $n:expr) => {
+            LedState {
+                leds: vec![led!($color); $n],
+            }
+        };
+
+        ($($color:tt),+ $(,)?) => {{
+            let leds = vec![
+                $(led!($color)),+
+            ];
+
+            LedState { leds }
+        }};
+    }
 }

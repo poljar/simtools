@@ -465,4 +465,87 @@ mod test {
             "Setting the RPM to 8000.0 should set the collor on all LEDs to red",
         );
     }
+
+    #[test]
+    fn blinking() {
+        const MAX_RPM: f64 = 9000.0;
+        let mut container = container();
+        container.blink_enabled = true;
+        container.gradient_on_all = true;
+
+        let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
+        let mut rpm_led_state = RpmLedState::new(container);
+
+        sim_state.update_rpm(0.0);
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            &leds![off; 5],
+            rpm_led_state.state(),
+            "The LEDs should initially be off",
+        );
+
+        sim_state.update_rpm(MAX_RPM);
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            &leds!["red"; 5],
+            rpm_led_state.state(),
+            "Setting the RPM to the MAX RPM should set the collor on all LEDs to red",
+        );
+
+        std::thread::sleep(rpm_led_state.container().blink_delay);
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            &leds![off; 5],
+            rpm_led_state.state(),
+            "The LEDs should be turned off after the blink delay has passed",
+        );
+
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            &leds![off; 5],
+            rpm_led_state.state(),
+            "The state of the LEDs should not change unless the blink delay has expired"
+        );
+
+        std::thread::sleep(rpm_led_state.container().blink_delay);
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            &leds!["red"; 5],
+            rpm_led_state.state(),
+            "The LEDs should be turned on again after the blink delay has passed"
+        );
+    }
+
+    #[test]
+    fn reverse() {
+        const MAX_RPM: f64 = 9000.0;
+        let mut container = container();
+        container.right_to_left = true;
+
+        let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
+        let mut rpm_led_state = RpmLedState::new(container);
+
+        sim_state.update_rpm(MAX_RPM * 0.87);
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            &leds![off, off, off, off, "lime"],
+            rpm_led_state.state(),
+            "Setting the RPM to 87% of the MAX RPM, should turn the first LED on, the most right one",
+        );
+
+        sim_state.update_rpm(MAX_RPM * 0.90);
+        rpm_led_state.update(&sim_state);
+
+        assert_eq!(
+            &leds![off, off, off, (0.25, 0.75, 0.0), "lime"],
+            rpm_led_state.state(),
+            "Getting to 0.9 of the MAX RPM should turn on another LED, from the right side",
+        );
+    }
 }

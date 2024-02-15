@@ -53,6 +53,10 @@ impl FlagLedState {
         }
     }
 
+    pub fn leds(&self) -> &LedState {
+        &self.state
+    }
+
     fn calculate_next_blink_state(&self, is_flag_enabled: bool) -> BlinkState {
         if self.container.blink_enabled && is_flag_enabled {
             match self.blink_state {
@@ -129,5 +133,129 @@ impl FlagLedState {
 
     pub fn container(&self) -> &FlagContainer {
         &self.container
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use csscolorparser::Color;
+    use serde_json::json;
+    use simetry::RacingFlags;
+
+    use crate::{led, leds};
+
+    use super::*;
+
+    struct SimState {
+        inner: RacingFlags,
+    }
+
+    impl SimState {
+        fn new() -> Self {
+            Self {
+                inner: Default::default(),
+            }
+        }
+    }
+
+    impl Moment for SimState {
+        fn flags(&self) -> Option<RacingFlags> {
+            Some(self.inner.clone())
+        }
+    }
+
+    fn container() -> FlagContainer {
+        let container = json!({
+            "LedCount": 3,
+            "Color": "Yellow",
+            "BlinkEnabled": true,
+            "BlinkDelay": 50,
+            "DualBlinkTimingEnabled": false,
+            "OffDelay": 75,
+            "OnDelay": 12,
+            "StartPosition": 14,
+            "ContainerId": "11730b72-ff66-47f3-9615-6a3406325cb6",
+            "ContainerType": "YellowFlagContainer",
+            "Description": "Generates a static color when the Yellow flag is ON copy",
+            "IsEnabled": true
+        });
+
+        serde_json::from_value(container)
+            .expect("We should be able to deserialize the default Flag container")
+    }
+
+    #[test]
+    fn blinking() {
+        let container = container();
+
+        let mut flags = SimState::new();
+        let mut state = FlagLedState::new(FlagColor::Yellow, container);
+
+        state.update(&flags);
+
+        assert_eq!(
+            &leds![off; 3],
+            state.leds(),
+            "The LEDs should stay off if no flag is waving"
+        );
+
+        flags.inner.white = true;
+        state.update(&flags);
+
+        assert_eq!(
+            &leds![off; 3],
+            state.leds(),
+            "The white flag should not turn on LEDs for the yellow flag"
+        );
+
+        flags.inner.yellow = true;
+        state.update(&flags);
+
+        assert_eq!(
+            &leds!["Yellow"; 3],
+            state.leds(),
+            "The yellow flag should turn all the LEDs on"
+        );
+
+        state.update(&flags);
+        assert_eq!(
+            &leds!["Yellow"; 3],
+            state.leds(),
+            "The state of the LEDs should not change unless the blink delay has expired"
+        );
+
+        std::thread::sleep(state.container().blink_delay);
+        state.update(&flags);
+
+        assert_eq!(
+            &leds![off; 3],
+            state.leds(),
+            "The LEDs should be turned off after the blink delay has passed"
+        );
+
+        state.update(&flags);
+        assert_eq!(
+            &leds![off; 3],
+            state.leds(),
+            "The state of the LEDs should not change unless the blink delay has expired"
+        );
+
+        std::thread::sleep(state.container().blink_delay);
+        state.update(&flags);
+
+        assert_eq!(
+            &leds!["yellow"; 3],
+            state.leds(),
+            "The LEDs should be turned on again after the blink delay has passed"
+        );
+
+        flags.inner.yellow = false;
+        state.update(&flags);
+
+        assert_eq!(
+            &leds![off; 3],
+            state.leds(),
+            "The LEDs should be turned off if the flag stopped waving"
+        );
     }
 }

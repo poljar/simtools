@@ -25,6 +25,7 @@ use std::time::Duration;
 
 use csscolorparser::Color;
 use serde::{Deserialize, Deserializer};
+use serde_json::value::RawValue;
 use uuid::Uuid;
 
 use self::{
@@ -56,7 +57,10 @@ pub struct LedProfile {
     /// the brightness of all the LEDs?
     pub use_profile_brightness: bool,
     /// TODO: What does this do?
+    #[serde(default)]
     pub automatic_switch: bool,
+    pub embedded_javascript: Option<String>,
+    pub game_code: Option<String>,
     /// A list of [`LedContainer`] values which configure a set of LEDs.
     pub led_containers: Vec<LedContainer>,
 }
@@ -66,12 +70,9 @@ pub struct LedProfile {
 /// There are different container types, each of them might react to different inputs, i.e. there
 /// are containers that react to the RPM of the engine, to flags being waved on the track, and
 /// other various track and car conditions being met.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "ContainerType", rename_all = "PascalCase")]
+#[derive(Debug, Clone)]
 pub enum LedContainer {
-    #[serde(rename = "RPMContainer")]
     RpmContainer(RpmContainer),
-    #[serde(rename = "RPMSegmentsContainer")]
     RpmSegmentsContainer(RpmSegmentsContainer),
     RedlineReachedContainer(RedlineReachedContainer),
     SpeedLimiterAnimationContainer(SpeedLimiterAnimationContainer),
@@ -79,8 +80,64 @@ pub enum LedContainer {
     BlueFlagContainer(FlagContainer),
     WhiteFlagContainer(FlagContainer),
     YellowFlagContainer(FlagContainer),
-    #[serde(other)]
-    Unknown,
+    Unknown {
+        container_type: String,
+        content: Box<RawValue>,
+    },
+}
+
+impl<'de> Deserialize<'de> for LedContainer {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        fn from_str<'a, T, E>(string: &'a str) -> Result<T, E>
+        where
+            T: serde::Deserialize<'a>,
+            E: serde::de::Error,
+        {
+            serde_json::from_str(string).map_err(serde::de::Error::custom)
+        }
+
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "PascalCase")]
+        struct Helper<'a> {
+            container_type: &'a str,
+        }
+
+        let json = Box::<serde_json::value::RawValue>::deserialize(deserializer)?;
+
+        let helper: Helper<'_> =
+            serde_json::from_str(json.get()).map_err(serde::de::Error::custom)?;
+
+        // The container type might have a dot delimited prefix or it might have just the container
+        // type. This will handle both cases, and give us the container type in PascalCase.
+        let container_type = helper.container_type.split('.').last().ok_or_else(|| {
+            serde::de::Error::custom(format!(
+                "Container type doesn't have a falid form: {}",
+                helper.container_type
+            ))
+        })?;
+
+        let content = json.get();
+
+        Ok(match container_type {
+            "RPMContainer" => LedContainer::RpmContainer(from_str(content)?),
+            "RPMSegmentsContainer" => LedContainer::RpmSegmentsContainer(from_str(content)?),
+            "RedlineReachedContainer" => LedContainer::RedlineReachedContainer(from_str(content)?),
+            "SpeedLimiterAnimationContainer" => {
+                LedContainer::SpeedLimiterAnimationContainer(from_str(content)?)
+            }
+            "YellowFlagContainer" => LedContainer::YellowFlagContainer(from_str(content)?),
+            "BlueFlagContainer" => LedContainer::BlueFlagContainer(from_str(content)?),
+            "WhiteFlagContainer" => LedContainer::WhiteFlagContainer(from_str(content)?),
+            "GroupContainer" => LedContainer::GroupContainer(from_str(content)?),
+            t => LedContainer::Unknown {
+                container_type: t.to_string(),
+                content: json,
+            },
+        })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

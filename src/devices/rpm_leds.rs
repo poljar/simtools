@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::num::NonZeroUsize;
+
 use anyhow::{Context as _, Result};
 use csscolorparser::Color;
 use hidapi::{HidApi, HidDevice};
@@ -176,7 +178,9 @@ impl LmxRpmLeds {
             .map(Led::new)
     }
 
-    pub fn apply_led_state(&mut self, start_led: usize, led_state: &LedState) -> Result<()> {
+    pub fn apply_led_state(&mut self, start_led: NonZeroUsize, led_state: &LedState) -> Result<()> {
+        let start_led = start_led.get();
+
         for (mut led, led_config) in self.leds().skip(start_led - 1).zip(&led_state.leds) {
             // TODO: Don't hardcode the brightness here.
             match led_config {

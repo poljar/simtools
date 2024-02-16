@@ -174,7 +174,6 @@ mod test {
             "OffDelay": 75,
             "OnDelay": 12,
             "StartPosition": 14,
-            "ContainerId": "11730b72-ff66-47f3-9615-6a3406325cb6",
             "ContainerType": "YellowFlagContainer",
             "Description": "Generates a static color when the Yellow flag is ON copy",
             "IsEnabled": true

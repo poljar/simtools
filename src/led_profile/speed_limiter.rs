@@ -22,18 +22,18 @@ use std::{num::NonZeroUsize, time::Duration};
 
 use csscolorparser::Color;
 use serde::Deserialize;
-use uuid::Uuid;
 
-use super::{color_from_str, duration_from_int_ms};
+use super::{color_from_str, default_non_zero, duration_from_int_ms};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct SpeedLimiterAnimationContainer {
+    #[serde(default)]
     pub description: String,
-    pub container_id: Uuid,
     pub is_enabled: bool,
     pub led_count: NonZeroUsize,
-    pub start_position: usize,
+    #[serde(default = "default_non_zero")]
+    pub start_position: NonZeroUsize,
     #[serde(deserialize_with = "color_from_str")]
     pub color_1_alternate: Color,
     #[serde(deserialize_with = "color_from_str")]

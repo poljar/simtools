@@ -26,9 +26,8 @@ use uom::si::{
     angular_velocity::revolution_per_minute,
     f64::{AngularVelocity, Ratio},
 };
-use uuid::Uuid;
 
-use super::{color_from_str, duration_from_int_ms};
+use super::{color_from_str, default_non_zero, duration_from_int_ms};
 
 /// The configuration for a LED profile container which turns on LEDs based on the value of the RPM
 /// of the engine.
@@ -40,17 +39,18 @@ use super::{color_from_str, duration_from_int_ms};
 #[serde(rename_all = "PascalCase")]
 pub struct RpmContainer {
     /// The human readable description of the [`RpmContainer`].
+    #[serde(default)]
     pub description: String,
-    /// The globally unique ID of the container.
-    pub container_id: Uuid,
     /// Is this container enabled.
     pub is_enabled: bool,
     /// The number of the first LED this container should control.
-    pub start_position: usize,
+    #[serde(default = "default_non_zero")]
+    pub start_position: NonZeroUsize,
     /// The total number of LEDs this container should control.
     pub led_count: NonZeroUsize,
     /// Should we use the specified percentages to calculate how many LEDs need to be turned on
     /// instead of the raw [`RpmContainer::rpm_min`] and [`RpmContainer::rpm_max`] values?
+    #[serde(default)]
     pub use_percent: bool,
     /// The percentage of the RPM that should start turning LEDs on.
     pub percent_min: Ratio,
@@ -75,24 +75,30 @@ pub struct RpmContainer {
     pub end_color: Color,
     /// Should the LEDs be filled out from right to left instead of the usual left to right
     /// direction?
+    #[serde(default)]
     pub right_to_left: bool,
     /// Should the LEDs blink when the maximum RPM of the car is reached, the so called redline.
     /// This is not the [`RpmContainer::rpm_max`] setting, the maximum RPM of the car is defined by
     /// the simulator.
+    #[serde(default)]
     pub blink_enabled: bool,
     /// How long should the LED stay on and off when blinking, in other words how long do we wait
     /// before we change the state of the LED.
     #[serde(deserialize_with = "duration_from_int_ms")]
     pub blink_delay: Duration,
     /// Should the LEDs also blink when the maximum RPM is reached in the last gear?
+    #[serde(default)]
     pub blink_on_last_gear: bool,
     /// TODO: What does this setting do?
+    #[serde(default)]
     pub use_led_dimming: bool,
     /// Should the same color, the one that is furthest on the gradient and enabled because of the
     /// RPM value, be used for all the currently active LEDs?
+    #[serde(default)]
     pub gradient_on_all: bool,
     /// Should all the LEDs be turned on from the start, only the colors will differ based on the
     /// RPM. This only works in conjunction with the [`RpmContainer::gradient_on_all`] setting.
+    #[serde(default)]
     pub fill_all_leds: bool,
 }
 
@@ -105,24 +111,26 @@ pub struct RpmContainer {
 #[serde(rename_all = "PascalCase")]
 pub struct RpmSegmentsContainer {
     /// The human readable description of the [`RpmContainer`].
+    #[serde(default)]
     pub description: String,
-    /// The globally unique ID of the container.
-    pub container_id: Uuid,
     /// Is this container enabled.
     pub is_enabled: bool,
     /// The number of the first LED this container should control.
-    pub start_position: u32,
+    #[serde(default = "default_non_zero")]
+    pub start_position: NonZeroUsize,
     /// The number of segments this container has. This value isn't particularly useful since it's
     /// better to take a look at [`RPMSegmentsContainer::segments::len()`]
     pub segments_count: u32,
     /// Should the LEDs blink when TODO: When do we blink here exactly?
+    #[serde(default)]
     pub blink_enabled: bool,
     /// How long should the LED stay on and off when blinking, in other words how long do we wait
     /// before we change the state of the LED.
-    #[serde(deserialize_with = "duration_from_int_ms")]
+    #[serde(default, deserialize_with = "duration_from_int_ms")]
     pub blink_delay: Duration,
     /// Should the LEDs only (or as well?) blink when the maximum RPM or percentage of it are
     /// reached in the last gear?
+    #[serde(default)]
     pub blink_on_last_gear: bool,
     /// The list of LED segments.
     pub segments: Vec<LedSegment>,

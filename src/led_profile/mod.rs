@@ -21,7 +21,7 @@
 //! Module containing parsers for popular LED light profile file formats for Sim racing which
 //! configure how LED lights on Sim racing dashboards and steering wheels should operate.
 
-use std::time::Duration;
+use std::{num::NonZeroUsize, time::Duration};
 
 use csscolorparser::Color;
 use serde::{Deserialize, Deserializer};

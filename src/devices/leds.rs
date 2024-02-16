@@ -28,7 +28,7 @@ use strum::{EnumIter, IntoEnumIterator};
 
 use crate::led::state::{rpm::gradient::RpmLedState, LedConfiguration, LedState};
 
-pub struct LmxRpmLeds {
+pub struct LmxLeds {
     device: HidDevice,
     leds: [u8; 21 * 4],
 }
@@ -99,7 +99,7 @@ impl<'a> LedSegment<'a> {
     }
 }
 
-impl LmxRpmLeds {
+impl LmxLeds {
     const VID: u16 = 0x04d8;
     const PID: u16 = 0x32af;
 

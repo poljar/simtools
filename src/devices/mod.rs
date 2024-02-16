@@ -20,16 +20,16 @@
 
 mod buttons;
 mod display;
-mod rpm_leds;
+mod leds;
 
 pub use buttons::LmxButtonPlate;
 pub use display::USBD480Display;
-pub use rpm_leds::LmxRpmLeds;
+pub use leds::LmxLeds;
 
 pub struct LmxWheel {
     buttons: LmxButtonPlate,
     display: USBD480Display,
-    rpm_leds: LmxRpmLeds,
+    rpm_leds: LmxLeds,
 }
 
 impl LmxWheel {
@@ -43,7 +43,7 @@ impl LmxWheel {
 
         let display = USBD480Display::open(&context)?;
         let buttons = LmxButtonPlate::open(&hidapi)?;
-        let rpm_leds = LmxRpmLeds::open(&hidapi)?;
+        let rpm_leds = LmxLeds::open(&hidapi)?;
 
         Ok(Self {
             buttons,
@@ -56,7 +56,7 @@ impl LmxWheel {
         &self.buttons
     }
 
-    pub fn rpm_leds_mut(&mut self) -> &mut LmxRpmLeds {
+    pub fn rpm_leds_mut(&mut self) -> &mut LmxLeds {
         &mut self.rpm_leds
     }
 

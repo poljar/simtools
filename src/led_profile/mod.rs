@@ -30,12 +30,14 @@ use uuid::Uuid;
 
 use self::{
     flag::FlagContainer,
+    groups::{ConditionalGroupContainer, GroupContainer, TimeLimitedGroupContainer},
     redline::RedlineReachedContainer,
     rpm::{RpmContainer, RpmSegmentsContainer},
     speed_limiter::SpeedLimiterAnimationContainer,
 };
 
 pub mod flag;
+pub mod groups;
 pub mod redline;
 pub mod rpm;
 pub mod speed_limiter;
@@ -77,6 +79,9 @@ pub enum LedContainer {
     RedlineReachedContainer(RedlineReachedContainer),
     SpeedLimiterAnimationContainer(SpeedLimiterAnimationContainer),
     GroupContainer(GroupContainer),
+    GameRunningGroupContainer(GroupContainer),
+    CartStartedGroupContainer(TimeLimitedGroupContainer),
+    ConditionalGroupContainer(ConditionalGroupContainer),
     BlueFlagContainer(FlagContainer),
     WhiteFlagContainer(FlagContainer),
     YellowFlagContainer(FlagContainer),
@@ -132,23 +137,23 @@ impl<'de> Deserialize<'de> for LedContainer {
             "BlueFlagContainer" => LedContainer::BlueFlagContainer(from_str(content)?),
             "WhiteFlagContainer" => LedContainer::WhiteFlagContainer(from_str(content)?),
             "GroupContainer" => LedContainer::GroupContainer(from_str(content)?),
+            "GameRunningGroupContainer" => {
+                LedContainer::GameRunningGroupContainer(from_str(content)?)
+            }
+            // Yes, this is a typo, we need to support it.
+            "GameCarStatedGroupContainer" => {
+                LedContainer::CartStartedGroupContainer(from_str(content)?)
+            }
+            "CustomConditionalGroupContainer" => {
+                LedContainer::ConditionalGroupContainer(from_str(content)?)
+            }
+
             t => LedContainer::Unknown {
                 container_type: t.to_string(),
                 content: json,
             },
         })
     }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub struct GroupContainer {
-    pub description: String,
-    pub container_id: Uuid,
-    pub is_enabled: bool,
-    pub stack_left_to_right: bool,
-    pub start_position: u32,
-    pub led_containers: Vec<LedContainer>,
 }
 
 /// Helper to deserialize a integer containing milliseconds into a [`Duration`].
@@ -166,4 +171,8 @@ where
 {
     String::deserialize(deserializer)
         .and_then(|color| Color::from_html(color).map_err(serde::de::Error::custom))
+}
+
+pub fn default_non_zero() -> NonZeroUsize {
+    NonZeroUsize::MIN
 }

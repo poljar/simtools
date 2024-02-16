@@ -26,7 +26,7 @@ use hidapi::{HidApi, HidDevice};
 use simetry::assetto_corsa_competizione::Client;
 use strum::{EnumIter, IntoEnumIterator};
 
-use crate::led::state::{rpm_gradient::RpmLedState, LedConfiguration, LedState};
+use crate::led::state::{rpm::gradient::RpmLedState, LedConfiguration, LedState};
 
 pub struct LmxRpmLeds {
     device: HidDevice,

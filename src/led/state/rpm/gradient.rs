@@ -23,8 +23,8 @@ use simetry::Moment;
 use std::time::Instant;
 use uom::si::{f64::AngularVelocity, ratio::ratio};
 
-use super::{BlinkState, LedConfiguration, LedState, MomentExt};
 use crate::led::profiles::rpm::RpmContainer;
+use crate::led::state::{BlinkState, LedConfiguration, LedState, MomentExt};
 
 // TODO: Support LED dimming, aka the [`RpmContainer::use_led_dimming`] setting.
 

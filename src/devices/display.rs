@@ -255,18 +255,17 @@ impl USBD480Display {
         Ok(())
     }
 
-    pub fn write_bytes(&self, pixels: &[u8]) -> Result<()> {
+    fn write_bytes_impl(&self, start_address: u32, pixels: &[u8]) -> Result<()> {
         const MAX_PACKET_SIZE: usize = 4096;
 
-        let mut current_address: u32 = 0;
+        let mut address: u32 = start_address;
         let mut command = Vec::with_capacity(MAX_PACKET_SIZE);
 
         for chunk in pixels.chunks(MAX_PACKET_SIZE) {
             let pixel_count = (chunk.len() / 2) as u32 - 1;
-            let address = current_address.to_le_bytes();
 
             command.extend_from_slice(&Self::WRITE_COMMAND.to_le_bytes());
-            command.extend_from_slice(&address);
+            command.extend_from_slice(&address.to_le_bytes());
             command.extend_from_slice(&pixel_count.to_le_bytes());
             command.extend_from_slice(chunk);
 
@@ -274,42 +273,22 @@ impl USBD480Display {
 
             command.clear();
 
-            current_address += pixel_count + 1;
+            address += pixel_count + 1;
         }
 
         Ok(())
     }
 
-    fn write_pixels_contiguous(
-        &self,
-        area: &Rectangle,
-        pixels: impl Iterator<Item = u8>,
-    ) -> Result<()> {
-        const MAX_PACKET_SIZE: usize = 4096;
+    pub fn write_bytes(&self, pixels: &[u8]) -> Result<()> {
+        let start_address: u32 = 0;
+        self.write_bytes_impl(start_address, pixels)
+    }
 
+    fn write_pixels_contiguous(&self, area: &Rectangle, pixels: Vec<u8>) -> Result<()> {
         let top_left = area.top_left;
-        let mut current_address = top_left.y as u32 * 480 + top_left.x as u32;
-        let mut command = Vec::with_capacity(MAX_PACKET_SIZE);
+        let start_address = top_left.y as u32 * 480 + top_left.x as u32;
 
-        for chunk in &pixels.chunks(MAX_PACKET_SIZE) {
-            let chunk = chunk.collect_vec();
-
-            let pixel_count = (chunk.len() / 2) as u32 - 1;
-            let address = current_address.to_le_bytes();
-
-            command.extend_from_slice(&Self::WRITE_COMMAND.to_le_bytes());
-            command.extend_from_slice(&address);
-            command.extend_from_slice(&pixel_count.to_le_bytes());
-            command.extend_from_slice(&chunk);
-
-            self.write_to_bulk_endpoint(&command)?;
-
-            command.clear();
-
-            current_address += pixel_count + 1;
-        }
-
-        Ok(())
+        self.write_bytes_impl(start_address, &pixels)
     }
 }
 
@@ -414,9 +393,10 @@ impl DrawTarget for USBD480Display {
         let Size { width, height } = self.size();
         let drawable_area = Rectangle::new(Point::zero(), self.size());
 
-        let pixels = iter::repeat(RawU16::from(color).into_inner().to_le_bytes())
+        let pixels: Vec<u8> = iter::repeat(RawU16::from(color).into_inner().to_le_bytes())
             .flatten()
-            .take((width * height * 2) as usize);
+            .take((width * height * 2) as usize)
+            .collect();
 
         self.write_pixels_contiguous(&drawable_area, pixels)?;
 

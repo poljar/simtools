@@ -22,7 +22,7 @@ use std::time::Instant;
 
 use simetry::Moment;
 
-use crate::led_profile::flag::FlagContainer;
+use crate::led::profiles::flag::FlagContainer;
 
 use super::{BlinkState, LedConfiguration, LedState};
 

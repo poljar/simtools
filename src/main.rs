@@ -26,13 +26,12 @@ use clap::{Parser, Subcommand};
 
 use crate::{
     devices::{LmxWheel, USBD480Display},
-    led_profile::{LedContainer, LedProfile},
-    led_state::rpm_gradient::RpmLedState,
+    led::profiles::{LedContainer, LedProfile},
+    led::state::rpm_gradient::RpmLedState,
 };
 
 mod devices;
-mod led_profile;
-mod led_state;
+mod led;
 
 #[derive(Debug, Parser)]
 struct Cli {

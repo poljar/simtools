@@ -21,9 +21,6 @@
 //! Module containing parsers for popular LED light profile file formats for Sim racing which
 //! configure how LED lights on Sim racing dashboards and steering wheels should operate.
 
-use std::{num::NonZeroUsize, time::Duration};
-
-use csscolorparser::Color;
 use serde::{Deserialize, Deserializer};
 use serde_json::value::RawValue;
 use uuid::Uuid;
@@ -35,6 +32,9 @@ use self::{
     rpm::{RpmContainer, RpmSegmentsContainer},
     speed_limiter::SpeedLimiterAnimationContainer,
 };
+
+pub use self::helpers::*;
+mod helpers;
 
 pub mod flag;
 pub mod groups;
@@ -154,25 +154,4 @@ impl<'de> Deserialize<'de> for LedContainer {
             },
         })
     }
-}
-
-/// Helper to deserialize a integer containing milliseconds into a [`Duration`].
-pub fn duration_from_int_ms<'de, D>(deserializer: D) -> Result<Duration, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    u64::deserialize(deserializer).map(Duration::from_millis)
-}
-
-/// Helper to deserialize a string containing a HTML color into a [`Color`].
-pub fn color_from_str<'de, D>(deserializer: D) -> Result<Color, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    String::deserialize(deserializer)
-        .and_then(|color| Color::from_html(color).map_err(serde::de::Error::custom))
-}
-
-pub fn default_non_zero() -> NonZeroUsize {
-    NonZeroUsize::MIN
 }

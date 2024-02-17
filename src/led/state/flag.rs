@@ -172,6 +172,7 @@ impl LedEffect for FlagLedState {
 pub mod test {
     use serde_json::json;
     use simetry::RacingFlags;
+    use similar_asserts::assert_eq;
 
     use crate::leds;
 

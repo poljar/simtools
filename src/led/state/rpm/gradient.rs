@@ -219,6 +219,7 @@ impl LedEffect for RpmLedState {
 #[cfg(test)]
 mod test {
     use serde_json::json;
+    use similar_asserts::assert_eq;
     use uom::si::{angular_velocity::revolution_per_minute, f64::AngularVelocity};
 
     use crate::leds;

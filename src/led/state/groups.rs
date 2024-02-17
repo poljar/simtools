@@ -243,6 +243,7 @@ impl LedEffect for GroupState {
 #[cfg(test)]
 mod test {
     use serde_json::json;
+    use similar_asserts::assert_eq;
 
     use crate::{led::state::flag::test::SimState, leds};
 

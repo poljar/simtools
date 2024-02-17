@@ -63,6 +63,7 @@ impl LmxButtonPlate {
 #[cfg(test)]
 mod test {
     use super::*;
+    use similar_asserts::assert_eq;
 
     #[test]
     fn checksum() {

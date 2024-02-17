@@ -19,16 +19,18 @@
 // SOFTWARE.
 
 use csscolorparser::Color;
-use std::{num::NonZeroUsize, time::Instant};
+use std::{fmt::Debug, num::NonZeroUsize, time::Instant};
 
 use simetry::Moment;
 
 pub mod flag;
+pub mod groups;
 pub mod rpm;
 
-pub trait LedFoo {
-    fn state(&self) -> &LedState;
+pub trait LedEffect: Debug {
+    fn leds(&self) -> Box<dyn Iterator<Item = &LedState> + '_>;
     fn update(&mut self, sim_state: &dyn Moment);
+    fn disable(&mut self);
     fn start_led(&self) -> usize;
     fn description(&self) -> &str;
 }
@@ -50,6 +52,18 @@ pub trait MomentExt: Moment {
         // If we're within 2% of the MAX RPM of a car, we're going to consider this to be at
         // the redline.
         (max_rpm - rpm).abs() < error_margin
+    }
+
+    fn is_engine_running(&self) -> bool {
+        let Some(is_starting) = self.is_starter_on() else {
+            return false;
+        };
+
+        let Some(rpm) = self.vehicle_engine_rotation_speed() else {
+            return false;
+        };
+
+        !is_starting && rpm.value > 0.0
     }
 }
 

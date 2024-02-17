@@ -24,14 +24,16 @@ use simetry::Moment;
 
 use crate::led::profiles::flag::FlagContainer;
 
-use super::{BlinkState, LedConfiguration, LedState};
+use super::{BlinkState, LedConfiguration, LedEffect, LedState};
 
+#[derive(Debug)]
 pub enum FlagColor {
     White,
     Yellow,
     Blue,
 }
 
+#[derive(Debug)]
 pub struct FlagLedState {
     flag_color: FlagColor,
     container: FlagContainer,
@@ -51,10 +53,6 @@ impl FlagLedState {
             state,
             blink_state: BlinkState::default(),
         }
-    }
-
-    pub fn leds(&self) -> &LedState {
-        &self.state
     }
 
     fn calculate_next_blink_state(&self, is_flag_enabled: bool) -> BlinkState {
@@ -130,14 +128,36 @@ impl FlagLedState {
 
         self.blink_state = next_blink_state;
     }
+}
 
-    pub fn container(&self) -> &FlagContainer {
-        &self.container
+impl LedEffect for FlagLedState {
+    fn update(&mut self, sim_state: &dyn Moment) {
+        self.update(sim_state)
+    }
+
+    fn start_led(&self) -> usize {
+        self.container.start_position.into()
+    }
+
+    fn description(&self) -> &str {
+        &self.container.description
+    }
+
+    fn leds(&self) -> Box<dyn Iterator<Item = &LedState> + '_> {
+        Box::new(std::iter::once(&self.state))
+    }
+
+    fn disable(&mut self) {
+        self.blink_state = BlinkState::NotBlinking;
+
+        for led in &mut self.state.leds {
+            *led = LedConfiguration::Off;
+        }
     }
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use csscolorparser::Color;
     use serde_json::json;
     use simetry::RacingFlags;
@@ -146,12 +166,12 @@ mod test {
 
     use super::*;
 
-    struct SimState {
-        inner: RacingFlags,
+    pub struct SimState {
+        pub inner: RacingFlags,
     }
 
     impl SimState {
-        fn new() -> Self {
+        pub fn new() -> Self {
             Self {
                 inner: Default::default(),
             }
@@ -194,7 +214,7 @@ mod test {
 
         assert_eq!(
             &leds![off; 3],
-            state.leds(),
+            &state.state,
             "The LEDs should stay off if no flag is waving"
         );
 
@@ -203,7 +223,7 @@ mod test {
 
         assert_eq!(
             &leds![off; 3],
-            state.leds(),
+            &state.state,
             "The white flag should not turn on LEDs for the yellow flag"
         );
 
@@ -212,39 +232,39 @@ mod test {
 
         assert_eq!(
             &leds!["Yellow"; 3],
-            state.leds(),
+            &state.state,
             "The yellow flag should turn all the LEDs on"
         );
 
         state.update(&flags);
         assert_eq!(
             &leds!["Yellow"; 3],
-            state.leds(),
+            &state.state,
             "The state of the LEDs should not change unless the blink delay has expired"
         );
 
-        std::thread::sleep(state.container().blink_delay);
+        std::thread::sleep(state.container.blink_delay);
         state.update(&flags);
 
         assert_eq!(
             &leds![off; 3],
-            state.leds(),
+            &state.state,
             "The LEDs should be turned off after the blink delay has passed"
         );
 
         state.update(&flags);
         assert_eq!(
             &leds![off; 3],
-            state.leds(),
+            &state.state,
             "The state of the LEDs should not change unless the blink delay has expired"
         );
 
-        std::thread::sleep(state.container().blink_delay);
+        std::thread::sleep(state.container.blink_delay);
         state.update(&flags);
 
         assert_eq!(
             &leds!["yellow"; 3],
-            state.leds(),
+            &state.state,
             "The LEDs should be turned on again after the blink delay has passed"
         );
 
@@ -253,7 +273,7 @@ mod test {
 
         assert_eq!(
             &leds![off; 3],
-            state.leds(),
+            &state.state,
             "The LEDs should be turned off if the flag stopped waving"
         );
     }

@@ -27,7 +27,7 @@ use uuid::Uuid;
 
 use self::{
     flag::FlagContainer,
-    groups::{ConditionalGroupContainer, GroupContainer, TimeLimitedGroupContainer},
+    groups::{ConditionalGroupContainer, SimpleGroupContainer, TimeLimitedGroupContainer},
     redline::RedlineReachedContainer,
     rpm::{RpmContainer, RpmSegmentsContainer},
     speed_limiter::SpeedLimiterAnimationContainer,
@@ -74,21 +74,26 @@ pub struct LedProfile {
 /// other various track and car conditions being met.
 #[derive(Debug, Clone)]
 pub enum LedContainer {
-    RpmContainer(RpmContainer),
-    RpmSegmentsContainer(RpmSegmentsContainer),
-    RedlineReachedContainer(RedlineReachedContainer),
-    SpeedLimiterAnimationContainer(SpeedLimiterAnimationContainer),
-    GroupContainer(GroupContainer),
-    GameRunningGroupContainer(GroupContainer),
-    CartStartedGroupContainer(TimeLimitedGroupContainer),
-    ConditionalGroupContainer(ConditionalGroupContainer),
-    BlueFlagContainer(FlagContainer),
-    WhiteFlagContainer(FlagContainer),
-    YellowFlagContainer(FlagContainer),
+    Rpm(RpmContainer),
+    RpmSegments(RpmSegmentsContainer),
+    RedlineReached(RedlineReachedContainer),
+    SpeedLimiterAnimation(SpeedLimiterAnimationContainer),
+    Group(GroupContainer),
+    BlueFlag(FlagContainer),
+    WhiteFlag(FlagContainer),
+    YellowFlag(FlagContainer),
     Unknown {
         container_type: String,
         content: Box<RawValue>,
     },
+}
+
+#[derive(Debug, Clone)]
+pub enum GroupContainer {
+    Simple(SimpleGroupContainer),
+    GameRunning(SimpleGroupContainer),
+    CarStarted(TimeLimitedGroupContainer),
+    Conditional(ConditionalGroupContainer),
 }
 
 impl<'de> Deserialize<'de> for LedContainer {
@@ -127,25 +132,25 @@ impl<'de> Deserialize<'de> for LedContainer {
         let content = json.get();
 
         Ok(match container_type {
-            "RPMContainer" => LedContainer::RpmContainer(from_str(content)?),
-            "RPMSegmentsContainer" => LedContainer::RpmSegmentsContainer(from_str(content)?),
-            "RedlineReachedContainer" => LedContainer::RedlineReachedContainer(from_str(content)?),
+            "RPMContainer" => LedContainer::Rpm(from_str(content)?),
+            "RPMSegmentsContainer" => LedContainer::RpmSegments(from_str(content)?),
+            "RedlineReachedContainer" => LedContainer::RedlineReached(from_str(content)?),
             "SpeedLimiterAnimationContainer" => {
-                LedContainer::SpeedLimiterAnimationContainer(from_str(content)?)
+                LedContainer::SpeedLimiterAnimation(from_str(content)?)
             }
-            "YellowFlagContainer" => LedContainer::YellowFlagContainer(from_str(content)?),
-            "BlueFlagContainer" => LedContainer::BlueFlagContainer(from_str(content)?),
-            "WhiteFlagContainer" => LedContainer::WhiteFlagContainer(from_str(content)?),
-            "GroupContainer" => LedContainer::GroupContainer(from_str(content)?),
+            "YellowFlagContainer" => LedContainer::YellowFlag(from_str(content)?),
+            "BlueFlagContainer" => LedContainer::BlueFlag(from_str(content)?),
+            "WhiteFlagContainer" => LedContainer::WhiteFlag(from_str(content)?),
+            "GroupContainer" => LedContainer::Group(GroupContainer::Simple(from_str(content)?)),
             "GameRunningGroupContainer" => {
-                LedContainer::GameRunningGroupContainer(from_str(content)?)
+                LedContainer::Group(GroupContainer::GameRunning(from_str(content)?))
             }
             // Yes, this is a typo, we need to support it.
             "GameCarStatedGroupContainer" => {
-                LedContainer::CartStartedGroupContainer(from_str(content)?)
+                LedContainer::Group(GroupContainer::CarStarted(from_str(content)?))
             }
             "CustomConditionalGroupContainer" => {
-                LedContainer::ConditionalGroupContainer(from_str(content)?)
+                LedContainer::Group(GroupContainer::Conditional(from_str(content)?))
             }
 
             t => LedContainer::Unknown {

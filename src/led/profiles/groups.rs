@@ -48,7 +48,7 @@ impl<'de> Deserialize<'de> for StackingType {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct GroupContainer {
+pub struct SimpleGroupContainer {
     #[serde(default)]
     pub description: String,
     pub is_enabled: bool,

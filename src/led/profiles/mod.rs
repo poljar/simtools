@@ -21,6 +21,8 @@
 //! Module containing parsers for popular LED light profile file formats for Sim racing which
 //! configure how LED lights on Sim racing dashboards and steering wheels should operate.
 
+use std::num::NonZeroUsize;
+
 use serde::{Deserialize, Deserializer};
 use serde_json::value::RawValue;
 use uuid::Uuid;
@@ -83,9 +85,26 @@ pub enum LedContainer {
     WhiteFlag(FlagContainer),
     YellowFlag(FlagContainer),
     Unknown {
+        start_position: NonZeroUsize,
         container_type: String,
         content: Box<RawValue>,
     },
+}
+
+impl LedContainer {
+    pub fn start_position(&self) -> NonZeroUsize {
+        match self {
+            LedContainer::Rpm(c) => c.start_position,
+            LedContainer::RpmSegments(c) => c.start_position,
+            LedContainer::RedlineReached(c) => c.start_position,
+            LedContainer::SpeedLimiterAnimation(c) => c.start_position,
+            LedContainer::Group(c) => c.start_position(),
+            LedContainer::BlueFlag(c) => c.start_position,
+            LedContainer::WhiteFlag(c) => c.start_position,
+            LedContainer::YellowFlag(c) => c.start_position,
+            LedContainer::Unknown { start_position, .. } => *start_position,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -94,6 +113,17 @@ pub enum GroupContainer {
     GameRunning(SimpleGroupContainer),
     CarStarted(TimeLimitedGroupContainer),
     Conditional(ConditionalGroupContainer),
+}
+
+impl GroupContainer {
+    pub fn start_position(&self) -> NonZeroUsize {
+        match self {
+            GroupContainer::Simple(c) => c.start_position,
+            GroupContainer::GameRunning(c) => c.start_position,
+            GroupContainer::CarStarted(c) => c.start_position,
+            GroupContainer::Conditional(c) => c.start_position,
+        }
+    }
 }
 
 impl<'de> Deserialize<'de> for LedContainer {
@@ -113,6 +143,8 @@ impl<'de> Deserialize<'de> for LedContainer {
         #[serde(rename_all = "PascalCase")]
         struct Helper<'a> {
             container_type: &'a str,
+            #[serde(default = "default_non_zero")]
+            start_position: NonZeroUsize,
         }
 
         let json = Box::<serde_json::value::RawValue>::deserialize(deserializer)?;
@@ -154,6 +186,7 @@ impl<'de> Deserialize<'de> for LedContainer {
             }
 
             t => LedContainer::Unknown {
+                start_position: helper.start_position,
                 container_type: t.to_string(),
                 content: json,
             },

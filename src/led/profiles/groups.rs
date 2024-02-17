@@ -24,7 +24,7 @@ use serde::Deserialize;
 
 use super::{default_non_zero, duration_from_int_ms, LedContainer};
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum StackingType {
     LeftToRight,
     #[default]

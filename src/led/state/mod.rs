@@ -31,8 +31,12 @@ pub trait LedEffect: Debug {
     fn leds(&self) -> Box<dyn Iterator<Item = &LedState> + '_>;
     fn update(&mut self, sim_state: &dyn Moment);
     fn disable(&mut self);
-    fn start_led(&self) -> usize;
+    fn start_led(&self) -> NonZeroUsize;
     fn description(&self) -> &str;
+
+    fn led_count(&self) -> usize {
+        self.leds().map(|led_state| led_state.leds().len()).sum()
+    }
 }
 
 pub trait MomentExt: Moment {
@@ -83,20 +87,31 @@ pub enum BlinkState {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LedState {
-    pub leds: Vec<LedConfiguration>,
+    start_position: NonZeroUsize,
+    leds: Vec<LedConfiguration>,
 }
 
 impl LedState {
-    pub fn new(led_count: NonZeroUsize) -> Self {
+    pub fn new(start_position: NonZeroUsize, led_count: NonZeroUsize) -> Self {
         Self {
+            start_position,
             leds: vec![LedConfiguration::default(); led_count.get()],
         }
     }
 
-    pub fn with_color(color: Color, led_count: NonZeroUsize) -> Self {
+    pub fn with_color(color: Color, start_position: NonZeroUsize, led_count: NonZeroUsize) -> Self {
         Self {
+            start_position,
             leds: vec![LedConfiguration::On { color }; led_count.get()],
         }
+    }
+
+    pub fn start_position(&self) -> NonZeroUsize {
+        self.start_position
+    }
+
+    pub fn leds(&self) -> &[LedConfiguration] {
+        &self.leds
     }
 }
 
@@ -115,34 +130,46 @@ mod test {
     #[macro_export]
     macro_rules! led {
         (off) => {
-            LedConfiguration::Off
+            $crate::led::state::LedConfiguration::Off
         };
         (($r:expr, $g:expr, $b:expr)) => {
-            LedConfiguration::On {
-                color: Color::new($r, $g, $b, 1.0),
+            $crate::led::state::LedConfiguration::On {
+                color: ::csscolorparser::Color::new($r, $g, $b, 1.0),
             }
         };
         ($color:expr) => {
-            LedConfiguration::On {
-                color: Color::from_html($color).unwrap(),
+            $crate::led::state::LedConfiguration::On {
+                color: ::csscolorparser::Color::from_html($color).unwrap(),
             }
         };
     }
 
     #[macro_export]
     macro_rules! leds {
-        ($color:tt; $n:expr) => {
-            LedState {
-                leds: vec![led!($color); $n],
+        ($start_position:expr; $color:tt; $n:expr) => {
+            $crate::led::state::LedState {
+                start_position: ::std::num::NonZeroUsize::new($start_position).expect("Invalid start position, must be non-zero"),
+                leds: vec![$crate::led!($color); $n],
             }
         };
 
-        ($($color:tt),+ $(,)?) => {{
+        ($color:tt; $n:expr) => {
+            leds![1; $color; $n]
+        };
+
+        ($start_position:expr; $($color:tt),+ $(,)?) => {{
             let leds = vec![
-                $(led!($color)),+
+                $($crate::led!($color)),+
             ];
 
-            LedState { leds }
+            LedState {
+                start_position: ::std::num::NonZeroUsize::new($start_position).expect("Invalid start position, must be non-zero"),
+                leds
+            }
+        }};
+
+        ($($color:tt),+ $(,)?) => {{
+            leds![1; $($color),+]
         }};
     }
 }

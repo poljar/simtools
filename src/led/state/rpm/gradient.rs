@@ -20,6 +20,7 @@
 
 use colorgrad::{CustomGradient, Gradient};
 use simetry::Moment;
+use std::num::NonZeroUsize;
 use std::time::Instant;
 use uom::si::{f64::AngularVelocity, ratio::ratio};
 
@@ -37,7 +38,7 @@ pub struct RpmLedState {
 }
 
 impl RpmLedState {
-    pub fn new(container: RpmContainer) -> Self {
+    pub fn with_start_position(container: RpmContainer, start_position: NonZeroUsize) -> Self {
         let led_count = container.led_count.get();
 
         let gradient = CustomGradient::new()
@@ -50,11 +51,17 @@ impl RpmLedState {
             );
 
         Self {
-            state: LedState::new(container.led_count),
+            state: LedState::new(start_position, container.led_count),
             gradient,
             blink_state: Default::default(),
             container,
         }
+    }
+
+    #[cfg(test)]
+    pub fn new(container: RpmContainer) -> Self {
+        let start_position = container.start_position;
+        Self::with_start_position(container, start_position)
     }
 
     fn calculate_how_many_leds_to_turn_on(
@@ -184,8 +191,8 @@ impl LedEffect for RpmLedState {
         self.update(sim_state)
     }
 
-    fn start_led(&self) -> usize {
-        self.container.start_position.into()
+    fn start_led(&self) -> NonZeroUsize {
+        self.state.start_position()
     }
 
     fn description(&self) -> &str {
@@ -203,15 +210,18 @@ impl LedEffect for RpmLedState {
             *led = LedConfiguration::Off;
         }
     }
+
+    fn led_count(&self) -> usize {
+        self.state.leds.len()
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use csscolorparser::Color;
     use serde_json::json;
     use uom::si::{angular_velocity::revolution_per_minute, f64::AngularVelocity};
 
-    use crate::{led, leds};
+    use crate::leds;
 
     use super::*;
 

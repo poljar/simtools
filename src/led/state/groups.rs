@@ -78,7 +78,6 @@ pub enum SimpleConditionstate {
 #[derive(Debug)]
 pub struct GroupState {
     start_position: NonZeroUsize,
-    stacking_type: StackingType,
     condition: GroupCondition,
     states: Vec<Box<dyn LedEffect>>,
 }
@@ -107,39 +106,67 @@ impl GroupState {
         Self::new_helper(condition, start_position, stacking_type, containers)
     }
 
+    fn create_led_effect(
+        container: LedContainer,
+        start_position: NonZeroUsize,
+    ) -> Option<Box<dyn LedEffect>> {
+        match container {
+            LedContainer::Rpm(c) => Some(Box::new(RpmLedState::with_start_position(
+                c,
+                start_position,
+            ))),
+            LedContainer::RpmSegments(_)
+            | LedContainer::RedlineReached(_)
+            | LedContainer::SpeedLimiterAnimation(_) => None,
+            LedContainer::Group(c) => Some(Box::new(Self::new(c))),
+            LedContainer::BlueFlag(c) => Some(Box::new(FlagLedState::with_start_position(
+                FlagColor::Blue,
+                c,
+                start_position,
+            ))),
+            LedContainer::WhiteFlag(c) => Some(Box::new(FlagLedState::with_start_position(
+                FlagColor::White,
+                c,
+                start_position,
+            ))),
+            LedContainer::YellowFlag(c) => Some(Box::new(FlagLedState::with_start_position(
+                FlagColor::Yellow,
+                c,
+                start_position,
+            ))),
+            LedContainer::Unknown { .. } => None,
+        }
+    }
+
     fn new_helper(
         condition: GroupCondition,
-        start_position: NonZeroUsize,
+        group_start_position: NonZeroUsize,
         stacking_type: StackingType,
         containers: Vec<LedContainer>,
     ) -> Self {
         let mut states = Vec::with_capacity(containers.len());
 
-        // TODO: We need to modify the start position of every child, if the stack type is layered
-        // then every child's start position should just be pushed by the parents start position.
-        // On the other hand, if the stacking type is left to right, then we need to add the
-        // parents start position to the first child, the first child's start position to the
-        // second childe...
+        let mut start_position = group_start_position;
 
         for container in containers {
-            let state: Box<dyn LedEffect> = match container {
-                LedContainer::Rpm(c) => Box::new(RpmLedState::new(c)),
-                LedContainer::RpmSegments(_)
-                | LedContainer::RedlineReached(_)
-                | LedContainer::SpeedLimiterAnimation(_) => continue,
-                LedContainer::Group(c) => Box::new(Self::new(c)),
-                LedContainer::BlueFlag(c) => Box::new(FlagLedState::new(FlagColor::Blue, c)),
-                LedContainer::WhiteFlag(c) => Box::new(FlagLedState::new(FlagColor::White, c)),
-                LedContainer::YellowFlag(c) => Box::new(FlagLedState::new(FlagColor::Yellow, c)),
-                LedContainer::Unknown { container_type, .. } => continue,
+            if stacking_type == StackingType::Layered {
+                start_position =
+                    group_start_position.saturating_add(container.start_position().get() - 1);
+            }
+
+            let Some(state) = Self::create_led_effect(container, start_position) else {
+                continue;
             };
+
+            if stacking_type == StackingType::LeftToRight {
+                start_position = start_position.saturating_add(state.led_count());
+            }
 
             states.push(state);
         }
 
         Self {
             condition,
-            stacking_type,
             start_position,
             states,
         }
@@ -180,7 +207,7 @@ impl GroupState {
                 }
             },
             // TODO: Support ncalc style expressions.
-            GroupCondition::Conditional { formula } => (),
+            GroupCondition::Conditional { .. } => (),
         }
     }
 }
@@ -190,8 +217,8 @@ impl LedEffect for GroupState {
         self.update(sim_state)
     }
 
-    fn start_led(&self) -> usize {
-        self.start_position.into()
+    fn start_led(&self) -> NonZeroUsize {
+        self.start_position
     }
 
     fn description(&self) -> &str {
@@ -199,7 +226,7 @@ impl LedEffect for GroupState {
     }
 
     fn leds(&self) -> Box<dyn Iterator<Item = &LedState> + '_> {
-        Box::new(self.states.iter().map(|s| s.leds()).flatten())
+        Box::new(self.states.iter().flat_map(|s| s.leds()))
     }
 
     fn disable(&mut self) {
@@ -207,22 +234,21 @@ impl LedEffect for GroupState {
             state.disable()
         }
     }
+
+    fn led_count(&self) -> usize {
+        self.states.iter().map(|state| state.led_count()).sum()
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use csscolorparser::Color;
     use serde_json::json;
 
-    use crate::{
-        led,
-        led::state::{flag::test::SimState, LedConfiguration},
-        leds,
-    };
+    use crate::{led::state::flag::test::SimState, leds};
 
     use super::*;
 
-    fn container() -> GroupContainer {
+    fn container(stack_left_to_right: bool) -> GroupContainer {
         let container = json!({
           "LedContainers": [
               {
@@ -254,8 +280,8 @@ mod test {
                   "IsEnabled": true
               }
           ],
-          "StackLeftToRight": false,
-          "StartPosition": 1,
+          "StackLeftToRight": stack_left_to_right,
+          "StartPosition": 3,
           "ContainerType": "GroupContainer",
           "Description": "Group",
           "IsEnabled": true
@@ -268,17 +294,22 @@ mod test {
     }
 
     #[test]
-    fn white_flag_group() {
-        let container = container();
+    fn white_flag() {
+        let container = container(false);
         let mut state = GroupState::new(container);
-
         let mut flags = SimState::new();
 
         state.update(&flags);
 
         assert_eq!(
-            &leds![off; 3],
+            &leds![3; off; 3],
             state.states[0].leds().next().unwrap(),
+            "The LEDs should stay off if no flag is waving"
+        );
+
+        assert_eq!(
+            &leds![16; off; 3],
+            state.states[1].leds().next().unwrap(),
             "The LEDs should stay off if no flag is waving"
         );
 
@@ -286,13 +317,50 @@ mod test {
         state.update(&flags);
 
         assert_eq!(
-            &leds!["White"; 3],
+            &leds![3; "White"; 3],
             state.states[0].leds().next().unwrap(),
             "The yellow flag should turn all the LEDs on"
         );
 
         assert_eq!(
-            &leds!["White"; 3],
+            &leds![16; "White"; 3],
+            state.states[1].leds().next().unwrap(),
+            "The yellow flag should turn all the LEDs on"
+        );
+    }
+
+    #[test]
+    fn white_flag_left_to_right_stacking() {
+        let container = container(true);
+        let mut state = GroupState::new(container);
+
+        let mut flags = SimState::new();
+
+        state.update(&flags);
+
+        assert_eq!(
+            &leds![3; off; 3],
+            state.states[0].leds().next().unwrap(),
+            "The LEDs should stay off if no flag is waving"
+        );
+
+        assert_eq!(
+            &leds![6; off; 3],
+            state.states[1].leds().next().unwrap(),
+            "The LEDs should stay off if no flag is waving"
+        );
+
+        flags.inner.white = true;
+        state.update(&flags);
+
+        assert_eq!(
+            &leds![3; "White"; 3],
+            state.states[0].leds().next().unwrap(),
+            "The yellow flag should turn all the LEDs on"
+        );
+
+        assert_eq!(
+            &leds![6; "White"; 3],
             state.states[1].leds().next().unwrap(),
             "The yellow flag should turn all the LEDs on"
         );

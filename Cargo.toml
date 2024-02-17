@@ -8,19 +8,19 @@ rust-version = "1.75"
 
 [dependencies]
 anyhow = "1.0.79"
-cairo-rs = "0.18.5"
+cairo-rs = "0.19.2"
 colorgrad = "0.6.2"
 csscolorparser = "0.6.2"
-clap = { version = "4.4.18", features = ["derive"] }
+clap = { version = "4.5.1", features = ["derive"] }
 embedded-graphics = "0.8.1"
-hidapi = { version = "2.4.1" }
-itertools = "0.12.0"
+hidapi = { version = "2.6.0" }
+itertools = "0.12.1"
 rusb = "0.9.3"
 strum = { version = "0.26.1", features = ["derive"] }
-serde = { version = "1.0.195", features = ["derive"] }
-serde_json = { version = "1.0.111", features = ["raw_value"] }
-simetry = { path = "../simetry/" }
-tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread"]}
+serde = { version = "1.0.196", features = ["derive"] }
+serde_json = { version = "1.0.113", features = ["raw_value"] }
+simetry = { git = "https://github.com/poljar/simetry", rev = "267833877058b2881b235dccdd59b40e00e6dd1d" }
+tokio = { version = "1.36.0", features = ["macros", "rt-multi-thread"]}
 uuid = { version = "1.7.0", features = ["serde"] }
 uom = { version = "0.35.0", features = ["serde"] }
 

@@ -18,15 +18,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::num::NonZeroUsize;
-
 use anyhow::{Context as _, Result};
 use csscolorparser::Color;
 use hidapi::{HidApi, HidDevice};
 use simetry::assetto_corsa_competizione::Client;
 use strum::{EnumIter, IntoEnumIterator};
 
-use crate::led::state::{rpm::gradient::RpmLedState, LedConfiguration, LedState};
+use crate::led::state::{groups::GroupState, LedConfiguration, LedEffect, LedState};
 
 pub struct LmxLeds {
     device: HidDevice,
@@ -178,15 +176,15 @@ impl LmxLeds {
             .map(Led::new)
     }
 
-    pub fn apply_led_state(&mut self, start_led: NonZeroUsize, led_state: &LedState) -> Result<()> {
-        let start_led = start_led.get();
+    pub fn apply_led_state(&mut self, led_state: &LedState) -> Result<()> {
+        let start_led = led_state.start_position().get();
 
-        for (mut led, led_config) in self.leds().skip(start_led - 1).zip(&led_state.leds) {
+        for (mut led, led_config) in self.leds().skip(start_led - 1).zip(led_state.leds()) {
             // TODO: Don't hardcode the brightness here.
             match led_config {
                 LedConfiguration::On { color } => {
-                    led.set_color(&color);
-                    led.set_brightness(0x02);
+                    led.set_color(color);
+                    led.set_brightness(0x04);
                 }
                 LedConfiguration::Off => led.set_brightness(0x00),
             }
@@ -204,26 +202,25 @@ impl LmxLeds {
         Ok(())
     }
 
-    pub async fn run_led_profile(&mut self, mut led_state: RpmLedState) -> Result<()> {
-        println!(
-            "Running RPM based LED configuration:\n\t{}",
-            led_state.container().description
-        );
+    pub async fn run_led_profile(&mut self, mut led_state: GroupState) -> Result<()> {
+        println!("Running RPM based LED configuration:\n\t",);
 
         self.turn_off()
             .context("Could not turn off the RPM LEDs to go back to the initial state")?;
 
-        let mut client = Client::try_connect()
-            .await
-            .context("Could not connect to the Assetto Corsa Competizione SHM file")?;
+        loop {
+            let mut client = Client::try_connect()
+                .await
+                .context("Could not connect to the Assetto Corsa Competizione SHM file")?;
 
-        while let Some(sim_state) = client.next_sim_state().await {
-            led_state.update(&sim_state);
+            while let Some(sim_state) = client.next_sim_state().await {
+                led_state.update(&sim_state);
 
-            self.apply_led_state(led_state.container().start_position, led_state.state())
-                .context("Could not apply the new LED state")?;
+                for state in led_state.leds() {
+                    self.apply_led_state(state)
+                        .context("Could not apply the new LED state")?;
+                }
+            }
         }
-
-        Ok(())
     }
 }

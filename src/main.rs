@@ -20,14 +20,14 @@
 
 use std::{fs::File, io::BufReader, path::PathBuf};
 
-use anyhow::{anyhow, Context as _, Result};
+use anyhow::{Context as _, Result};
 use cairo::{Format, ImageSurface};
 use clap::{Parser, Subcommand};
+use led::state::groups::GroupState;
 
 use crate::{
     devices::{LmxWheel, USBD480Display},
-    led::profiles::{LedContainer, LedProfile},
-    led::state::rpm::gradient::RpmLedState,
+    led::profiles::LedProfile,
 };
 
 mod devices;
@@ -114,21 +114,9 @@ async fn main() -> Result<()> {
 
             let profile: LedProfile =
                 serde_json::from_reader(reader).context("Could not deserialize the LED profile")?;
+            let root_group = GroupState::root(profile);
 
-            let led_state = profile
-                .led_containers
-                .into_iter()
-                .find_map(|container| {
-                    if let LedContainer::RpmContainer(c) = container {
-                        let led_state = RpmLedState::new(c);
-                        Some(led_state)
-                    } else {
-                        None
-                    }
-                })
-                .ok_or(anyhow!("Couldn't find any supported LED configuration"))?;
-
-            lmx.rpm_leds_mut().run_led_profile(led_state).await?;
+            lmx.rpm_leds_mut().run_led_profile(root_group).await?;
         }
     }
 

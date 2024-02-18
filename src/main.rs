@@ -87,9 +87,9 @@ fn draw_letter(display: &USBD480Display) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut lmx = LmxWheel::open()?;
-
     let cli = Cli::parse();
+
+    let mut lmx = LmxWheel::open()?;
 
     match cli.command {
         CliCommand::Draw => {

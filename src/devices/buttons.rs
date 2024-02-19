@@ -7,8 +7,8 @@
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -30,9 +30,7 @@ impl LmxButtonPlate {
     const PID: u16 = 0xffff;
 
     pub fn open(hidapi: &HidApi) -> Result<Self> {
-        let inner = hidapi
-            .open(Self::VID, Self::PID)
-            .context("Could not open the LM-X Wheel")?;
+        let inner = hidapi.open(Self::VID, Self::PID).context("Could not open the LM-X Wheel")?;
 
         Ok(Self { inner })
     }
@@ -45,9 +43,7 @@ impl LmxButtonPlate {
 
     pub fn set_color(&self, r: u8, g: u8, b: u8) -> Result<()> {
         // Repord ID ?    ?     ?  LED Nr. ?     Br   B  G  R   ?     ?   Checksum
-        let mut package = [
-            0x00, 0xff, 0xaa, 0x43, 0x01, 0x02, 0xe1, b, g, r, 0x00, 0x00, 0x00,
-        ];
+        let mut package = [0x00, 0xff, 0xaa, 0x43, 0x01, 0x02, 0xe1, b, g, r, 0x00, 0x00, 0x00];
 
         let checksum = Self::calculate_checksum(&package[..package.len() - 1]);
         package[package.len() - 1] = checksum;
@@ -62,8 +58,9 @@ impl LmxButtonPlate {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use similar_asserts::assert_eq;
+
+    use super::*;
 
     #[test]
     fn checksum() {

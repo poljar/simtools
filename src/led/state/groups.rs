@@ -7,8 +7,8 @@
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -25,28 +25,22 @@ use std::{
 
 use simetry::Moment;
 
-use crate::led::profiles::{
-    groups::{Formula, StackingType},
-    GroupContainer, LedContainer, LedProfile,
-};
-
 use super::{
     flag::{FlagColor, FlagLedState},
     rpm::gradient::RpmLedState,
-    LedEffect, LedState, MomentExt,
+    LedEffect, Leds, MomentExt,
+};
+use crate::led::profiles::{
+    groups::{Formula, StackingType},
+    GroupContainer, LedContainer, LedProfile,
 };
 
 #[derive(Debug)]
 pub enum GroupCondition {
     AlwaysOn,
     GameStarted,
-    CarStarted {
-        duration: Duration,
-        state: SimpleConditionstate,
-    },
-    Conditional {
-        formula: Formula,
-    },
+    CarStarted { duration: Duration, state: SimpleConditionstate },
+    Conditional { formula: Formula },
 }
 
 impl From<&GroupContainer> for GroupCondition {
@@ -54,13 +48,12 @@ impl From<&GroupContainer> for GroupCondition {
         match value {
             GroupContainer::Simple(_) => GroupCondition::AlwaysOn,
             GroupContainer::GameRunning(_) => GroupCondition::GameStarted,
-            GroupContainer::CarStarted(c) => GroupCondition::CarStarted {
-                duration: c.duration,
-                state: Default::default(),
-            },
-            GroupContainer::Conditional(c) => GroupCondition::Conditional {
-                formula: c.trigger_formula.clone(),
-            },
+            GroupContainer::CarStarted(c) => {
+                GroupCondition::CarStarted { duration: c.duration, state: Default::default() }
+            }
+            GroupContainer::Conditional(c) => {
+                GroupCondition::Conditional { formula: c.trigger_formula.clone() }
+            }
         }
     }
 }
@@ -111,10 +104,9 @@ impl GroupState {
         start_position: NonZeroUsize,
     ) -> Option<Box<dyn LedEffect>> {
         match container {
-            LedContainer::Rpm(c) => Some(Box::new(RpmLedState::with_start_position(
-                c,
-                start_position,
-            ))),
+            LedContainer::Rpm(c) => {
+                Some(Box::new(RpmLedState::with_start_position(c, start_position)))
+            }
             LedContainer::RpmSegments(_)
             | LedContainer::RedlineReached(_)
             | LedContainer::SpeedLimiterAnimation(_) => None,
@@ -165,11 +157,7 @@ impl GroupState {
             states.push(state);
         }
 
-        Self {
-            condition,
-            start_position,
-            states,
-        }
+        Self { condition, start_position, states }
     }
 
     fn update_states(&mut self, sim_state: &dyn Moment) {
@@ -186,9 +174,7 @@ impl GroupState {
             GroupCondition::CarStarted { duration, state } => match state {
                 SimpleConditionstate::Waiting => {
                     if sim_state.is_engine_running() {
-                        *state = SimpleConditionstate::Triggered {
-                            trigger_time: Instant::now(),
-                        };
+                        *state = SimpleConditionstate::Triggered { trigger_time: Instant::now() };
                         self.update_states(sim_state);
                     }
                 }
@@ -225,7 +211,7 @@ impl LedEffect for GroupState {
         ""
     }
 
-    fn leds(&self) -> Box<dyn Iterator<Item = &LedState> + '_> {
+    fn leds(&self) -> Box<dyn Iterator<Item = &Leds> + '_> {
         Box::new(self.states.iter().flat_map(|s| s.leds()))
     }
 
@@ -245,9 +231,8 @@ mod test {
     use serde_json::json;
     use similar_asserts::assert_eq;
 
-    use crate::{led::state::flag::test::SimState, leds};
-
     use super::*;
+    use crate::{led::state::flag::test::SimState, leds};
 
     fn container(stack_left_to_right: bool) -> GroupContainer {
         let container = json!({

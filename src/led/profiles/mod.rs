@@ -7,8 +7,8 @@
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -18,8 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//! Module containing parsers for popular LED light profile file formats for Sim racing which
-//! configure how LED lights on Sim racing dashboards and steering wheels should operate.
+//! Module containing parsers for popular LED light profile file formats for Sim
+//! racing which configure how LED lights on Sim racing dashboards and steering
+//! wheels should operate.
 
 use std::num::NonZeroUsize;
 
@@ -27,6 +28,7 @@ use serde::{Deserialize, Deserializer};
 use serde_json::value::RawValue;
 use uuid::Uuid;
 
+pub use self::helpers::*;
 use self::{
     flag::FlagContainer,
     groups::{ConditionalGroupContainer, SimpleGroupContainer, TimeLimitedGroupContainer},
@@ -34,8 +36,6 @@ use self::{
     rpm::{RpmContainer, RpmSegmentsContainer},
     speed_limiter::SpeedLimiterAnimationContainer,
 };
-
-pub use self::helpers::*;
 mod helpers;
 
 pub mod flag;
@@ -44,10 +44,12 @@ pub mod redline;
 pub mod rpm;
 pub mod speed_limiter;
 
-/// The [`LedProfile`] struct contains configurations for controlling RGB LED lights.
+/// The [`LedProfile`] struct contains configurations for controlling RGB LED
+/// lights.
 ///
-/// This struct collects configurations and definitions how LED lights on a steering wheel or data
-/// display unit should behave depending on the inputs of a simracing game.
+/// This struct collects configurations and definitions how LED lights on a
+/// steering wheel or data display unit should behave depending on the inputs of
+/// a simracing game.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct LedProfile {
@@ -57,8 +59,8 @@ pub struct LedProfile {
     pub profile_id: Uuid,
     /// The brightness of all the LEDs this profile configures.
     pub global_brightness: f64,
-    /// Should the [`LedProfile::global_brightness`] property of the profile be used to configure
-    /// the brightness of all the LEDs?
+    /// Should the [`LedProfile::global_brightness`] property of the profile be
+    /// used to configure the brightness of all the LEDs?
     pub use_profile_brightness: bool,
     /// TODO: What does this do?
     #[serde(default)]
@@ -69,11 +71,13 @@ pub struct LedProfile {
     pub led_containers: Vec<LedContainer>,
 }
 
-/// The [`LedContainer`] contains a single configuration for the behavior of a set of LED lights.
+/// The [`LedContainer`] contains a single configuration for the behavior of a
+/// set of LED lights.
 ///
-/// There are different container types, each of them might react to different inputs, i.e. there
-/// are containers that react to the RPM of the engine, to flags being waved on the track, and
-/// other various track and car conditions being met.
+/// There are different container types, each of them might react to different
+/// inputs, i.e. there are containers that react to the RPM of the engine, to
+/// flags being waved on the track, and other various track and car conditions
+/// being met.
 #[derive(Debug, Clone)]
 pub enum LedContainer {
     Rpm(RpmContainer),
@@ -84,11 +88,7 @@ pub enum LedContainer {
     BlueFlag(FlagContainer),
     WhiteFlag(FlagContainer),
     YellowFlag(FlagContainer),
-    Unknown {
-        start_position: NonZeroUsize,
-        container_type: String,
-        content: Box<RawValue>,
-    },
+    Unknown { start_position: NonZeroUsize, container_type: String, content: Box<RawValue> },
 }
 
 impl LedContainer {
@@ -152,8 +152,9 @@ impl<'de> Deserialize<'de> for LedContainer {
         let helper: Helper<'_> =
             serde_json::from_str(json.get()).map_err(serde::de::Error::custom)?;
 
-        // The container type might have a dot delimited prefix or it might have just the container
-        // type. This will handle both cases, and give us the container type in PascalCase.
+        // The container type might have a dot delimited prefix or it might have just
+        // the container type. This will handle both cases, and give us the
+        // container type in PascalCase.
         let container_type = helper.container_type.split('.').last().ok_or_else(|| {
             serde::de::Error::custom(format!(
                 "Container type doesn't have a falid form: {}",

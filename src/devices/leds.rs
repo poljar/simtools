@@ -7,8 +7,8 @@
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -24,7 +24,7 @@ use hidapi::{HidApi, HidDevice};
 use simetry::assetto_corsa_competizione::Client;
 use strum::{EnumIter, IntoEnumIterator};
 
-use crate::led::state::{groups::GroupState, LedConfiguration, LedEffect, LedState};
+use crate::led::state::{groups::GroupState, LedConfiguration, LedEffect, Leds};
 
 pub struct LmxLeds {
     device: HidDevice,
@@ -77,9 +77,7 @@ impl<'a> LedSegment<'a> {
 
     #[allow(dead_code)]
     pub fn leds(&mut self) -> impl Iterator<Item = Led> {
-        self.buffer[2..]
-            .chunks_exact_mut(Self::BYTES_PER_LED)
-            .map(Led::new)
+        self.buffer[2..].chunks_exact_mut(Self::BYTES_PER_LED).map(Led::new)
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -87,13 +85,11 @@ impl<'a> LedSegment<'a> {
     }
 
     pub fn commit_segment(&self) -> Result<()> {
-        self.device
-            .send_feature_report(self.as_bytes())
-            .with_context(|| {
-                let segment_id = self.buffer[1];
+        self.device.send_feature_report(self.as_bytes()).with_context(|| {
+            let segment_id = self.buffer[1];
 
-                format!("Could not commit the LED segment {segment_id:x}")
-            })
+            format!("Could not commit the LED segment {segment_id:x}")
+        })
     }
 }
 
@@ -105,9 +101,8 @@ impl LmxLeds {
     const SEGMENT_COUNT: usize = 4;
 
     pub fn open(hidapi: &HidApi) -> Result<Self> {
-        let inner = hidapi
-            .open(Self::VID, Self::PID)
-            .context("Could not open the LM-X RPM LEDs")?;
+        let inner =
+            hidapi.open(Self::VID, Self::PID).context("Could not open the LM-X RPM LEDs")?;
 
         let mut leds = [0u8; Self::COMMAND_BUFFER_SIZE * Self::SEGMENT_COUNT];
 
@@ -123,10 +118,7 @@ impl LmxLeds {
             chunk[1] = segment_id;
         }
 
-        Ok(Self {
-            device: inner,
-            leds,
-        })
+        Ok(Self { device: inner, leds })
     }
 
     fn commit(&self) -> Result<()> {
@@ -163,10 +155,7 @@ impl LmxLeds {
     }
 
     pub fn segments(&mut self) -> impl Iterator<Item = LedSegment> {
-        self.leds.chunks_exact_mut(21).map(|buffer| LedSegment {
-            buffer,
-            device: &self.device,
-        })
+        self.leds.chunks_exact_mut(21).map(|buffer| LedSegment { buffer, device: &self.device })
     }
 
     pub fn leds(&mut self) -> impl Iterator<Item = Led> {
@@ -176,7 +165,7 @@ impl LmxLeds {
             .map(Led::new)
     }
 
-    pub fn apply_led_state(&mut self, led_state: &LedState) -> Result<()> {
+    pub fn apply_led_state(&mut self, led_state: &Leds) -> Result<()> {
         let start_led = led_state.start_position().get();
 
         for (mut led, led_config) in self.leds().skip(start_led - 1).zip(led_state.leds()) {
@@ -217,8 +206,7 @@ impl LmxLeds {
                 led_state.update(&sim_state);
 
                 for state in led_state.leds() {
-                    self.apply_led_state(state)
-                        .context("Could not apply the new LED state")?;
+                    self.apply_led_state(state).context("Could not apply the new LED state")?;
                 }
             }
         }

@@ -7,8 +7,8 @@
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -22,9 +22,8 @@ use std::{num::NonZeroUsize, time::Instant};
 
 use simetry::Moment;
 
+use super::{BlinkState, LedConfiguration, LedEffect, Leds};
 use crate::led::profiles::flag::FlagContainer;
-
-use super::{BlinkState, LedConfiguration, LedEffect, LedState};
 
 #[derive(Debug)]
 pub enum FlagColor {
@@ -37,7 +36,7 @@ pub enum FlagColor {
 pub struct FlagLedState {
     flag_color: FlagColor,
     container: FlagContainer,
-    state: LedState,
+    state: Leds,
     blink_state: BlinkState,
 }
 
@@ -51,7 +50,7 @@ impl FlagLedState {
 
         Self {
             flag_color,
-            state: LedState::with_color(container.color.clone(), start_position, led_count),
+            state: Leds::with_color(container.color.clone(), start_position, led_count),
             container,
             blink_state: BlinkState::default(),
         }
@@ -66,9 +65,9 @@ impl FlagLedState {
     fn calculate_next_blink_state(&self, is_flag_enabled: bool) -> BlinkState {
         if self.container.blink_enabled && is_flag_enabled {
             match self.blink_state {
-                BlinkState::NotBlinking => BlinkState::LedsTurnedOn {
-                    state_change: Instant::now(),
-                },
+                BlinkState::NotBlinking => {
+                    BlinkState::LedsTurnedOn { state_change: Instant::now() }
+                }
                 BlinkState::LedsTurnedOff { state_change } => {
                     let delay = if self.container.dual_blink_timing_enabled {
                         self.container.off_delay
@@ -77,9 +76,7 @@ impl FlagLedState {
                     };
 
                     if state_change.elapsed() >= delay {
-                        BlinkState::LedsTurnedOn {
-                            state_change: Instant::now(),
-                        }
+                        BlinkState::LedsTurnedOn { state_change: Instant::now() }
                     } else {
                         self.blink_state
                     }
@@ -92,9 +89,7 @@ impl FlagLedState {
                     };
 
                     if state_change.elapsed() >= delay {
-                        BlinkState::LedsTurnedOff {
-                            state_change: Instant::now(),
-                        }
+                        BlinkState::LedsTurnedOff { state_change: Instant::now() }
                     } else {
                         self.blink_state
                     }
@@ -124,11 +119,12 @@ impl FlagLedState {
             BlinkState::LedsTurnedOn { .. } => true,
         };
 
+        // TODO: We could avoid this for loop if we had two LED arrays, one for the
+        // turned on state, one for the turned off state. Then we just flip a
+        // boolean.
         for led in &mut self.state.leds {
             *led = if leds_enabled {
-                LedConfiguration::On {
-                    color: self.container.color.clone(),
-                }
+                LedConfiguration::On { color: self.container.color.clone() }
             } else {
                 LedConfiguration::Off
             };
@@ -151,7 +147,7 @@ impl LedEffect for FlagLedState {
         &self.container.description
     }
 
-    fn leds(&self) -> Box<dyn Iterator<Item = &LedState> + '_> {
+    fn leds(&self) -> Box<dyn Iterator<Item = &Leds> + '_> {
         Box::new(std::iter::once(&self.state))
     }
 
@@ -174,9 +170,8 @@ pub mod test {
     use simetry::RacingFlags;
     use similar_asserts::assert_eq;
 
-    use crate::leds;
-
     use super::*;
+    use crate::leds;
 
     pub struct SimState {
         pub inner: RacingFlags,
@@ -184,9 +179,7 @@ pub mod test {
 
     impl SimState {
         pub fn new() -> Self {
-            Self {
-                inner: Default::default(),
-            }
+            Self { inner: Default::default() }
         }
     }
 

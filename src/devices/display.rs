@@ -7,8 +7,8 @@
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -44,21 +44,13 @@ pub struct DeviceDetails {
 
 impl DeviceDetails {
     fn from_bytes(bytes: &[u8; 64]) -> Result<Self> {
-        let name = CStr::from_bytes_until_nul(&bytes[0..20])?
-            .to_string_lossy()
-            .to_string();
+        let name = CStr::from_bytes_until_nul(&bytes[0..20])?.to_string_lossy().to_string();
         let display_width = u16::from_le_bytes([bytes[20], bytes[21]]);
         let display_height = u16::from_le_bytes([bytes[22], bytes[23]]);
         let version = u16::from_le_bytes([bytes[24], bytes[25]]);
         let serial_number = String::from_utf8_lossy(&bytes[26..36]).to_string();
 
-        Ok(Self {
-            name,
-            display_width,
-            display_height,
-            version,
-            serial_number,
-        })
+        Ok(Self { name, display_width, display_height, version, serial_number })
     }
 }
 
@@ -89,7 +81,8 @@ impl USBD480Display {
 
     /// Try to find a USBD480 display connected via USB.
     ///
-    /// This will use the first such display that is found, other displays will be ignored.
+    /// This will use the first such display that is found, other displays will
+    /// be ignored.
     pub fn open(context: &Context) -> Result<Self> {
         for device in context.devices()?.iter() {
             let device_desc = device.device_descriptor()?;
@@ -168,24 +161,28 @@ impl USBD480Display {
 
     /// Enable the stream decoder.
     ///
-    /// The stream decoder allows controlling the basic display functionality using the bulk USB
-    /// endpoint for data transfers.
+    /// The stream decoder allows controlling the basic display functionality
+    /// using the bulk USB endpoint for data transfers.
     ///
     /// The stream decoder has three subcommands:
-    /// 1. WRITE - Write image data in the RGB565 format to the framebuffer of the display.
-    /// 2. FRAMEBASE - Set the start address for the visible frame. The display will read 480x272
-    ///    pixels starting from this address and display them on the screen. The address change is
-    ///    synchronized with the display refresh VSYNC.
-    /// 3. WRAPLENGTH - This controls when the WRITE command should automatically move to the next
-    ///    row, i.e. when this is set to 480 (the default value) the WRITE command will fill out a
-    ///    whole row on the screen, if it's instead set to 240, the same WRITE command will fill
+    /// 1. WRITE - Write image data in the RGB565 format to the framebuffer of
+    ///    the display.
+    /// 2. FRAMEBASE - Set the start address for the visible frame. The display
+    ///    will read 480x272 pixels starting from this address and display them
+    ///    on the screen. The address change is synchronized with the display
+    ///    refresh VSYNC.
+    /// 3. WRAPLENGTH - This controls when the WRITE command should
+    ///    automatically move to the next row, i.e. when this is set to 480 (the
+    ///    default value) the WRITE command will fill out a whole row on the
+    ///    screen, if it's instead set to 240, the same WRITE command will fill
     ///    out two rows but only half of the screen width.
     fn enable_stream_decoder(&self) -> Result<()> {
         /// The `bRequest` value for the SET_STREAM_DECODER vendor request.
         const SET_STREAM_DECODER: u8 = 0xC6;
 
-        // The wValue of the SET_STREAM_DECODER vendor request. This either enables or disables
-        // the stream decoder. `0x06` is to enable the stream decoder, `0x0` to disable it.
+        // The wValue of the SET_STREAM_DECODER vendor request. This either enables or
+        // disables the stream decoder. `0x06` is to enable the stream decoder,
+        // `0x0` to disable it.
         let mode: u16 = 0x06;
         let request_type = request_type(Direction::Out, RequestType::Vendor, Recipient::Device);
 
@@ -205,24 +202,22 @@ impl USBD480Display {
 
     /// Write the given command to the bulk endpoint of the stream decoder.
     ///
-    /// The command needs to be a valid stream decoder command, one of WRITE, WRAPLENGTH, or
-    /// FRAMEBASE.
+    /// The command needs to be a valid stream decoder command, one of WRITE,
+    /// WRAPLENGTH, or FRAMEBASE.
     fn write_to_bulk_endpoint(&self, command: &[u8]) -> Result<usize> {
-        Ok(self
-            .handle
-            .write_bulk(Self::BULK_ENDPOINT, command, Self::REQUEST_TIMEOUT)?)
+        Ok(self.handle.write_bulk(Self::BULK_ENDPOINT, command, Self::REQUEST_TIMEOUT)?)
     }
 
     /// Set the wrap length of the stream decoder to the given length.
     ///
-    /// When writing data to the framebuffer the WRITE will automatically wrap to the next row
-    /// after WRAPLENGTH number of pixels.
+    /// When writing data to the framebuffer the WRITE will automatically wrap
+    /// to the next row after WRAPLENGTH number of pixels.
     fn set_wrap_length(&self, length: u16) -> Result<()> {
         /// The command identifier for the WRAPLENGTH stream encoder command.
         const WRAPLENGTH_COMMAND: u16 = 0x5B43;
 
-        // The wrap length is defined in the spec to be the actual length - 1. A value of 479
-        // means the full screen width, 0 is 1 pixel wide.
+        // The wrap length is defined in the spec to be the actual length - 1. A value
+        // of 479 means the full screen width, 0 is 1 pixel wide.
         let wrap_length_minus_one = length - 1;
 
         let mut command = vec![];
@@ -294,17 +289,15 @@ impl USBD480Display {
 
 impl Drop for USBD480Display {
     fn drop(&mut self) {
-        // TODO: Should we log a warning here? This could fail if the USB device was disconnected.
+        // TODO: Should we log a warning here? This could fail if the USB device was
+        // disconnected.
         let _ = self.handle.release_interface(Self::INTERFACE);
     }
 }
 
 impl OriginDimensions for USBD480Display {
     fn size(&self) -> Size {
-        Size {
-            width: Self::WIDTH,
-            height: Self::HEIGHT,
-        }
+        Size { width: Self::WIDTH, height: Self::HEIGHT }
     }
 }
 
@@ -343,9 +336,10 @@ impl DrawTarget for USBD480Display {
         let width = area.size.width as u16;
         let mut current_address = (area.top_left.y as u32 * 480) + area.top_left.x as u32;
 
-        // Set the wrap length to the width of the area, this ensures that we can just write the
-        // pixels to the framebuffer in a coniguous manner, the display will ensure that we go to
-        // the next row when we have written a `width` number of pixels.
+        // Set the wrap length to the width of the area, this ensures that we can just
+        // write the pixels to the framebuffer in a coniguous manner, the
+        // display will ensure that we go to the next row when we have written a
+        // `width` number of pixels.
         self.set_wrap_length(width)?;
 
         let mut command = Vec::with_capacity(512);

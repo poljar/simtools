@@ -7,8 +7,8 @@
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -18,14 +18,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::{num::NonZeroUsize, time::Instant};
+
 use colorgrad::{CustomGradient, Gradient};
 use simetry::Moment;
-use std::num::NonZeroUsize;
-use std::time::Instant;
 use uom::si::{f64::AngularVelocity, ratio::ratio};
 
-use crate::led::profiles::rpm::RpmContainer;
-use crate::led::state::{BlinkState, LedConfiguration, LedEffect, LedState, MomentExt};
+use crate::led::{
+    profiles::rpm::RpmContainer,
+    state::{BlinkState, LedConfiguration, LedEffect, Leds, MomentExt},
+};
 
 // TODO: Support LED dimming, aka the [`RpmContainer::use_led_dimming`] setting.
 
@@ -33,7 +35,7 @@ use crate::led::state::{BlinkState, LedConfiguration, LedEffect, LedState, Momen
 pub struct RpmLedState {
     container: RpmContainer,
     gradient: Gradient,
-    state: LedState,
+    state: Leds,
     blink_state: BlinkState,
 }
 
@@ -51,7 +53,7 @@ impl RpmLedState {
             );
 
         Self {
-            state: LedState::new(start_position, container.led_count),
+            state: Leds::new(start_position, container.led_count),
             gradient,
             blink_state: Default::default(),
             container,
@@ -85,9 +87,7 @@ impl RpmLedState {
             (rpm - rpm_min) / (rpm_max - rpm_min)
         };
 
-        (percentage_of_leds_to_turn_on * led_count as f64)
-            .floor::<ratio>()
-            .get::<ratio>() as usize
+        (percentage_of_leds_to_turn_on * led_count as f64).floor::<ratio>().get::<ratio>() as usize
     }
 
     fn calculate_next_blink_state(&self, sim_state: &dyn Moment) -> BlinkState {
@@ -103,23 +103,19 @@ impl RpmLedState {
 
         if redline_reached && blink_enabled && blink {
             match &self.blink_state {
-                BlinkState::NotBlinking => BlinkState::LedsTurnedOn {
-                    state_change: Instant::now(),
-                },
+                BlinkState::NotBlinking => {
+                    BlinkState::LedsTurnedOn { state_change: Instant::now() }
+                }
                 BlinkState::LedsTurnedOff { state_change } => {
                     if state_change.elapsed() >= self.container.blink_delay {
-                        BlinkState::LedsTurnedOn {
-                            state_change: Instant::now(),
-                        }
+                        BlinkState::LedsTurnedOn { state_change: Instant::now() }
                     } else {
                         self.blink_state
                     }
                 }
                 BlinkState::LedsTurnedOn { state_change } => {
                     if state_change.elapsed() >= self.container.blink_delay {
-                        BlinkState::LedsTurnedOff {
-                            state_change: Instant::now(),
-                        }
+                        BlinkState::LedsTurnedOff { state_change: Instant::now() }
                     } else {
                         self.blink_state
                     }
@@ -149,14 +145,12 @@ impl RpmLedState {
             };
 
         for (led_number, led) in led_iterator.enumerate() {
-            // If we're using the [`RpmContainer::gradient_on_all`] setting, we're going to pick
-            // the color of the active LED that is rightmost on the gradient for all LEDs,
-            // otherwise, each LED will get their color from the position on the gradient.
-            let gradient_position = if self.container.gradient_on_all {
-                leds_to_turn_on
-            } else {
-                led_number
-            };
+            // If we're using the [`RpmContainer::gradient_on_all`] setting, we're going to
+            // pick the color of the active LED that is rightmost on the
+            // gradient for all LEDs, otherwise, each LED will get their color
+            // from the position on the gradient.
+            let gradient_position =
+                if self.container.gradient_on_all { leds_to_turn_on } else { led_number };
 
             let enabled = match next_blink_state {
                 BlinkState::NotBlinking => {
@@ -199,7 +193,7 @@ impl LedEffect for RpmLedState {
         &self.container.description
     }
 
-    fn leds(&self) -> Box<dyn Iterator<Item = &LedState> + '_> {
+    fn leds(&self) -> Box<dyn Iterator<Item = &Leds> + '_> {
         Box::new(std::iter::once(&self.state))
     }
 
@@ -222,9 +216,8 @@ mod test {
     use similar_asserts::assert_eq;
     use uom::si::{angular_velocity::revolution_per_minute, f64::AngularVelocity};
 
-    use crate::leds;
-
     use super::*;
+    use crate::leds;
 
     struct RpmSimState {
         rpm: AngularVelocity,
@@ -335,13 +328,7 @@ mod test {
         rpm_led_state.update(&sim_state);
 
         assert_eq!(
-            &leds![
-                "lime",
-                (0.25, 0.75, 0.0),
-                (0.5, 0.5, 0.0),
-                (0.75, 0.25, 0.0),
-                "red"
-            ],
+            &leds!["lime", (0.25, 0.75, 0.0), (0.5, 0.5, 0.0), (0.75, 0.25, 0.0), "red"],
             &rpm_led_state.state,
             "Getting to 0.95 of the MAX RPM should turn on all LEDs",
         );
@@ -411,13 +398,7 @@ mod test {
         rpm_led_state.update(&sim_state);
 
         assert_eq!(
-            &leds![
-                "lime",
-                (0.25, 0.75, 0.0),
-                (0.5, 0.5, 0.0),
-                (0.75, 0.25, 0.0),
-                "red"
-            ],
+            &leds!["lime", (0.25, 0.75, 0.0), (0.5, 0.5, 0.0), (0.75, 0.25, 0.0), "red"],
             &rpm_led_state.state,
             "Getting to 8000 RPM should turn on all LEDs",
         );
@@ -445,7 +426,8 @@ mod test {
         sim_state.update_rpm(3850.0);
         rpm_led_state.update(&sim_state);
 
-        // The [`gradient_on_all`] setting ensures that all enabled LEDs have the same color.
+        // The [`gradient_on_all`] setting ensures that all enabled LEDs have the same
+        // color.
         assert_eq!(
             &leds![(0.5, 0.5, 0.0), (0.5, 0.5, 0.0), off, off, off],
             &rpm_led_state.state,
@@ -477,8 +459,8 @@ mod test {
         sim_state.update_rpm(3850.0);
         rpm_led_state.update(&sim_state);
 
-        // The `gradient_on_all` setting ensures that all LEDs have the same color and the
-        // `fill_all_leds` setting enables them all.
+        // The `gradient_on_all` setting ensures that all LEDs have the same color and
+        // the `fill_all_leds` setting enables them all.
         assert_eq!(
             &leds![(0.5, 0.5, 0.0); 5],
             &rpm_led_state.state,
@@ -508,11 +490,7 @@ mod test {
         sim_state.update_rpm(0.0);
         rpm_led_state.update(&sim_state);
 
-        assert_eq!(
-            &leds![off; 5],
-            &rpm_led_state.state,
-            "The LEDs should initially be off",
-        );
+        assert_eq!(&leds![off; 5], &rpm_led_state.state, "The LEDs should initially be off",);
 
         sim_state.update_rpm(MAX_RPM);
         rpm_led_state.update(&sim_state);

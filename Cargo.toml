@@ -12,9 +12,9 @@ rust-version = "1.75"
 repository = "https://github.com/poljar/simtools"
 
 [workspace.dependencies]
-anyhow = "1.0.79"
-serde = { version = "1.0.196", features = ["derive"] }
-serde_json = { version = "1.0.113", features = ["raw_value"] }
+anyhow = "1.0.80"
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = { version = "1.0.114", features = ["raw_value"] }
 simetry = { git = "https://github.com/poljar/simetry", rev = "267833877058b2881b235dccdd59b40e00e6dd1d" }
 tokio = { version = "1.36.0", features = ["macros", "rt-multi-thread"]}
 uuid = { version = "1.7.0", features = ["serde"] }

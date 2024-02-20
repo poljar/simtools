@@ -22,8 +22,10 @@ use std::{num::NonZeroUsize, time::Instant};
 
 use simetry::Moment;
 
-use super::{BlinkState, LedConfiguration, LedEffect, Leds};
-use crate::led::profiles::flag::FlagContainer;
+use super::{BlinkState, LedConfiguration, LedEffect, LedGroup, MomentExt};
+use crate::led::profiles::{
+    flag::FlagContainer, redline::RedlineReachedContainer, SimpleBlinkContainer,
+};
 
 #[derive(Debug)]
 pub enum FlagColor {
@@ -33,24 +35,43 @@ pub enum FlagColor {
 }
 
 #[derive(Debug)]
-pub struct FlagLedState {
-    flag_color: FlagColor,
-    container: FlagContainer,
-    state: Leds,
+pub enum EffectCondition {
+    Flag { color: FlagColor },
+    RedLine,
+}
+
+#[derive(Debug)]
+pub struct BlinkEffect {
+    condition: EffectCondition,
+    container: SimpleBlinkContainer,
+    state: LedGroup,
     blink_state: BlinkState,
 }
 
-impl FlagLedState {
-    pub fn with_start_position(
+impl BlinkEffect {
+    pub fn flag(
         flag_color: FlagColor,
         container: FlagContainer,
         start_position: NonZeroUsize,
     ) -> Self {
+        let container = container.0;
         let led_count = container.led_count;
 
         Self {
-            flag_color,
-            state: Leds::with_color(container.color.clone(), start_position, led_count),
+            condition: EffectCondition::Flag { color: flag_color },
+            state: LedGroup::with_color(container.color.clone(), start_position, led_count),
+            container,
+            blink_state: BlinkState::default(),
+        }
+    }
+
+    pub fn redline(container: RedlineReachedContainer, start_position: NonZeroUsize) -> Self {
+        let container = container.0;
+        let led_count = container.led_count;
+
+        Self {
+            condition: EffectCondition::RedLine,
+            state: LedGroup::with_color(container.color.clone(), start_position, led_count),
             container,
             blink_state: BlinkState::default(),
         }
@@ -58,8 +79,8 @@ impl FlagLedState {
 
     #[cfg(test)]
     pub fn new(flag_color: FlagColor, container: FlagContainer) -> Self {
-        let start_position = container.start_position;
-        Self::with_start_position(flag_color, container, start_position)
+        let start_position = container.0.start_position;
+        Self::flag(flag_color, container, start_position)
     }
 
     fn calculate_next_blink_state(&self, is_flag_enabled: bool) -> BlinkState {
@@ -105,16 +126,19 @@ impl FlagLedState {
             return;
         };
 
-        let is_flag_enabled = match self.flag_color {
-            FlagColor::White => flags.white,
-            FlagColor::Yellow => flags.yellow,
-            FlagColor::Blue => flags.blue,
+        let is_enabled = match &self.condition {
+            EffectCondition::Flag { color } => match color {
+                FlagColor::White => flags.white,
+                FlagColor::Yellow => flags.yellow,
+                FlagColor::Blue => flags.blue,
+            },
+            EffectCondition::RedLine => state.redline_reached(),
         };
 
-        let next_blink_state = self.calculate_next_blink_state(is_flag_enabled);
+        let next_blink_state = self.calculate_next_blink_state(is_enabled);
 
         let leds_enabled = match next_blink_state {
-            BlinkState::NotBlinking => is_flag_enabled,
+            BlinkState::NotBlinking => is_enabled,
             BlinkState::LedsTurnedOff { .. } => false,
             BlinkState::LedsTurnedOn { .. } => true,
         };
@@ -134,7 +158,7 @@ impl FlagLedState {
     }
 }
 
-impl LedEffect for FlagLedState {
+impl LedEffect for BlinkEffect {
     fn update(&mut self, sim_state: &dyn Moment) {
         self.update(sim_state)
     }
@@ -147,7 +171,7 @@ impl LedEffect for FlagLedState {
         &self.container.description
     }
 
-    fn leds(&self) -> Box<dyn Iterator<Item = &Leds> + '_> {
+    fn leds(&self) -> Box<dyn Iterator<Item = &LedGroup> + '_> {
         Box::new(std::iter::once(&self.state))
     }
 
@@ -171,7 +195,7 @@ pub mod test {
     use similar_asserts::assert_eq;
 
     use super::*;
-    use crate::leds;
+    use crate::{led::profiles::flag::FlagContainer, leds};
 
     pub struct SimState {
         pub inner: RacingFlags,
@@ -213,7 +237,7 @@ pub mod test {
         let container = container();
 
         let mut flags = SimState::new();
-        let mut state = FlagLedState::new(FlagColor::Yellow, container);
+        let mut state = BlinkEffect::new(FlagColor::Yellow, container);
 
         state.update(&flags);
 

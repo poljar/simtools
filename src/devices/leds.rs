@@ -24,7 +24,7 @@ use hidapi::{HidApi, HidDevice};
 use simetry::assetto_corsa_competizione::Client;
 use strum::{EnumIter, IntoEnumIterator};
 
-use crate::led::effects::{groups::GroupState, LedConfiguration, LedEffect, Leds};
+use crate::led::effects::{groups::EffectGroup, LedConfiguration, LedEffect, LedGroup};
 
 pub struct LmxLeds {
     device: HidDevice,
@@ -165,7 +165,7 @@ impl LmxLeds {
             .map(Led::new)
     }
 
-    pub fn apply_led_state(&mut self, led_state: &Leds) -> Result<()> {
+    pub fn apply_led_state(&mut self, led_state: &LedGroup) -> Result<()> {
         let start_led = led_state.start_position().get();
 
         for (mut led, led_config) in self.leds().skip(start_led - 1).zip(led_state.leds()) {
@@ -191,7 +191,7 @@ impl LmxLeds {
         Ok(())
     }
 
-    pub async fn run_led_profile(&mut self, mut led_state: GroupState) -> Result<()> {
+    pub async fn run_led_profile(&mut self, mut led_state: EffectGroup) -> Result<()> {
         println!("Running RPM based LED configuration:\n\t",);
 
         self.turn_off()

@@ -23,13 +23,13 @@ use std::{fmt::Debug, num::NonZeroUsize, time::Instant};
 use csscolorparser::Color;
 use simetry::Moment;
 
-pub mod flag;
+pub mod blink;
 pub mod groups;
 pub mod rpm;
 
 pub trait LedEffect: Debug {
     /// Get an iterator over the LEDs this effect controls.
-    fn leds(&self) -> Box<dyn Iterator<Item = &Leds> + '_>;
+    fn leds(&self) -> Box<dyn Iterator<Item = &LedGroup> + '_>;
     /// Update the state of the effect with the latest [`Moment`] in the
     /// simulator.
     fn update(&mut self, sim_state: &dyn Moment);
@@ -108,12 +108,12 @@ pub enum BlinkState {
 /// This struct contains a collection of [`LedConfiguration`] a RGB LED device
 /// should apply to its LEDs.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Leds {
+pub struct LedGroup {
     start_position: NonZeroUsize,
     leds: Vec<LedConfiguration>,
 }
 
-impl Leds {
+impl LedGroup {
     /// Create a new [`Leds`] group with the given start position and LED count.
     pub fn new(start_position: NonZeroUsize, led_count: NonZeroUsize) -> Self {
         Self { start_position, leds: vec![LedConfiguration::default(); led_count.get()] }
@@ -175,7 +175,7 @@ mod test {
     #[macro_export]
     macro_rules! leds {
         ($start_position:expr; $color:tt; $n:expr) => {
-            $crate::led::effects::Leds {
+            $crate::led::effects::LedGroup {
                 start_position: ::std::num::NonZeroUsize::new($start_position).expect("Invalid start position, must be non-zero"),
                 leds: vec![$crate::led!($color); $n],
             }
@@ -190,7 +190,7 @@ mod test {
                 $($crate::led!($color)),+
             ];
 
-            Leds {
+            LedGroup {
                 start_position: ::std::num::NonZeroUsize::new($start_position).expect("Invalid start position, must be non-zero"),
                 leds
             }

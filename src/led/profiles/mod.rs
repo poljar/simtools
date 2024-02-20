@@ -22,8 +22,9 @@
 //! racing which configure how LED lights on Sim racing dashboards and steering
 //! wheels should operate.
 
-use std::num::NonZeroUsize;
+use std::{num::NonZeroUsize, time::Duration};
 
+use csscolorparser::Color;
 use serde::{Deserialize, Deserializer};
 use serde_json::value::RawValue;
 use uuid::Uuid;
@@ -96,12 +97,12 @@ impl LedContainer {
         match self {
             LedContainer::Rpm(c) => c.start_position,
             LedContainer::RpmSegments(c) => c.start_position,
-            LedContainer::RedlineReached(c) => c.start_position,
+            LedContainer::RedlineReached(c) => c.0.start_position,
             LedContainer::SpeedLimiterAnimation(c) => c.start_position,
             LedContainer::Group(c) => c.start_position(),
-            LedContainer::BlueFlag(c) => c.start_position,
-            LedContainer::WhiteFlag(c) => c.start_position,
-            LedContainer::YellowFlag(c) => c.start_position,
+            LedContainer::BlueFlag(c) => c.0.start_position,
+            LedContainer::WhiteFlag(c) => c.0.start_position,
+            LedContainer::YellowFlag(c) => c.0.start_position,
             LedContainer::Unknown { start_position, .. } => *start_position,
         }
     }
@@ -124,6 +125,29 @@ impl GroupContainer {
             GroupContainer::Conditional(c) => c.start_position,
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct SimpleBlinkContainer {
+    #[serde(default)]
+    pub description: String,
+    pub is_enabled: bool,
+    pub led_count: NonZeroUsize,
+    #[serde(default = "default_non_zero")]
+    pub start_position: NonZeroUsize,
+    #[serde(deserialize_with = "color_from_str")]
+    pub color: Color,
+    #[serde(default)]
+    pub blink_enabled: bool,
+    #[serde(default, deserialize_with = "duration_from_int_ms")]
+    pub blink_delay: Duration,
+    #[serde(default)]
+    pub dual_blink_timing_enabled: bool,
+    #[serde(default, deserialize_with = "duration_from_int_ms")]
+    pub off_delay: Duration,
+    #[serde(default, deserialize_with = "duration_from_int_ms")]
+    pub on_delay: Duration,
 }
 
 impl<'de> Deserialize<'de> for LedContainer {

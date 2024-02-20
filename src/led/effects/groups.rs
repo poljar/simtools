@@ -26,9 +26,9 @@ use std::{
 use simetry::Moment;
 
 use super::{
-    flag::{FlagColor, FlagLedState},
-    rpm::gradient::RpmLedState,
-    LedEffect, Leds, MomentExt,
+    blink::{BlinkEffect, FlagColor},
+    rpm::gradient::RpmGradientEffect,
+    LedEffect, LedGroup, MomentExt,
 };
 use crate::led::profiles::{
     groups::{Formula, StackingType},
@@ -69,21 +69,20 @@ pub enum SimpleConditionstate {
 }
 
 #[derive(Debug)]
-pub struct GroupState {
+pub struct EffectGroup {
     start_position: NonZeroUsize,
     condition: GroupCondition,
     states: Vec<Box<dyn LedEffect>>,
 }
 
-impl GroupState {
+impl EffectGroup {
     pub fn root(profile: LedProfile) -> Self {
-        let condition = GroupCondition::AlwaysOn;
-        let stacking_type = StackingType::Layered;
-        let start_position = NonZeroUsize::MIN;
-
-        let containers = profile.led_containers;
-
-        Self::new_helper(condition, start_position, stacking_type, containers)
+        Self::new_helper(
+            GroupCondition::AlwaysOn,
+            NonZeroUsize::MIN,
+            StackingType::Layered,
+            profile.led_containers,
+        )
     }
 
     pub fn new(container: GroupContainer) -> Self {
@@ -105,27 +104,22 @@ impl GroupState {
     ) -> Option<Box<dyn LedEffect>> {
         match container {
             LedContainer::Rpm(c) => {
-                Some(Box::new(RpmLedState::with_start_position(c, start_position)))
+                Some(Box::new(RpmGradientEffect::with_start_position(c, start_position)))
             }
-            LedContainer::RpmSegments(_)
-            | LedContainer::RedlineReached(_)
-            | LedContainer::SpeedLimiterAnimation(_) => None,
+            LedContainer::RpmSegments(_) | LedContainer::SpeedLimiterAnimation(_) => None,
             LedContainer::Group(c) => Some(Box::new(Self::new(c))),
-            LedContainer::BlueFlag(c) => Some(Box::new(FlagLedState::with_start_position(
-                FlagColor::Blue,
-                c,
-                start_position,
-            ))),
-            LedContainer::WhiteFlag(c) => Some(Box::new(FlagLedState::with_start_position(
-                FlagColor::White,
-                c,
-                start_position,
-            ))),
-            LedContainer::YellowFlag(c) => Some(Box::new(FlagLedState::with_start_position(
-                FlagColor::Yellow,
-                c,
-                start_position,
-            ))),
+            LedContainer::BlueFlag(c) => {
+                Some(Box::new(BlinkEffect::flag(FlagColor::Blue, c, start_position)))
+            }
+            LedContainer::WhiteFlag(c) => {
+                Some(Box::new(BlinkEffect::flag(FlagColor::White, c, start_position)))
+            }
+            LedContainer::YellowFlag(c) => {
+                Some(Box::new(BlinkEffect::flag(FlagColor::Yellow, c, start_position)))
+            }
+            LedContainer::RedlineReached(c) => {
+                Some(Box::new(BlinkEffect::redline(c, start_position)))
+            }
             LedContainer::Unknown { .. } => None,
         }
     }
@@ -198,7 +192,7 @@ impl GroupState {
     }
 }
 
-impl LedEffect for GroupState {
+impl LedEffect for EffectGroup {
     fn update(&mut self, sim_state: &dyn Moment) {
         self.update(sim_state)
     }
@@ -211,7 +205,7 @@ impl LedEffect for GroupState {
         ""
     }
 
-    fn leds(&self) -> Box<dyn Iterator<Item = &Leds> + '_> {
+    fn leds(&self) -> Box<dyn Iterator<Item = &LedGroup> + '_> {
         Box::new(self.states.iter().flat_map(|s| s.leds()))
     }
 
@@ -232,7 +226,7 @@ mod test {
     use similar_asserts::assert_eq;
 
     use super::*;
-    use crate::{led::effects::flag::test::SimState, leds};
+    use crate::{led::effects::blink::test::SimState, leds};
 
     fn container(stack_left_to_right: bool) -> GroupContainer {
         let container = json!({
@@ -282,7 +276,7 @@ mod test {
     #[test]
     fn white_flag() {
         let container = container(false);
-        let mut state = GroupState::new(container);
+        let mut state = EffectGroup::new(container);
         let mut flags = SimState::new();
 
         state.update(&flags);
@@ -318,7 +312,7 @@ mod test {
     #[test]
     fn white_flag_left_to_right_stacking() {
         let container = container(true);
-        let mut state = GroupState::new(container);
+        let mut state = EffectGroup::new(container);
 
         let mut flags = SimState::new();
 

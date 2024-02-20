@@ -25,21 +25,21 @@ use simetry::Moment;
 use uom::si::{f64::AngularVelocity, ratio::ratio};
 
 use crate::led::{
-    effects::{BlinkState, LedConfiguration, LedEffect, Leds, MomentExt},
+    effects::{BlinkState, LedConfiguration, LedEffect, LedGroup, MomentExt},
     profiles::rpm::RpmContainer,
 };
 
 // TODO: Support LED dimming, aka the [`RpmContainer::use_led_dimming`] setting.
 
 #[derive(Debug)]
-pub struct RpmLedState {
+pub struct RpmGradientEffect {
     container: RpmContainer,
     gradient: Gradient,
-    state: Leds,
+    state: LedGroup,
     blink_state: BlinkState,
 }
 
-impl RpmLedState {
+impl RpmGradientEffect {
     pub fn with_start_position(container: RpmContainer, start_position: NonZeroUsize) -> Self {
         let led_count = container.led_count.get();
 
@@ -53,7 +53,7 @@ impl RpmLedState {
             );
 
         Self {
-            state: Leds::new(start_position, container.led_count),
+            state: LedGroup::new(start_position, container.led_count),
             gradient,
             blink_state: Default::default(),
             container,
@@ -180,7 +180,7 @@ impl RpmLedState {
     }
 }
 
-impl LedEffect for RpmLedState {
+impl LedEffect for RpmGradientEffect {
     fn update(&mut self, sim_state: &dyn Moment) {
         self.update(sim_state)
     }
@@ -193,7 +193,7 @@ impl LedEffect for RpmLedState {
         &self.container.description
     }
 
-    fn leds(&self) -> Box<dyn Iterator<Item = &Leds> + '_> {
+    fn leds(&self) -> Box<dyn Iterator<Item = &LedGroup> + '_> {
         Box::new(std::iter::once(&self.state))
     }
 
@@ -280,7 +280,7 @@ mod test {
         const MAX_RPM: f64 = 9000.0;
         let container = container();
         let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
-        let mut rpm_led_state = RpmLedState::new(container);
+        let mut rpm_led_state = RpmGradientEffect::new(container);
 
         assert_eq!(
             &leds![off; 5],
@@ -350,7 +350,7 @@ mod test {
         container.use_percent = false;
 
         let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
-        let mut rpm_led_state = RpmLedState::new(container);
+        let mut rpm_led_state = RpmGradientEffect::new(container);
 
         assert_eq!(
             &leds![off; 5],
@@ -421,7 +421,7 @@ mod test {
         container.gradient_on_all = true;
 
         let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
-        let mut rpm_led_state = RpmLedState::new(container);
+        let mut rpm_led_state = RpmGradientEffect::new(container);
 
         sim_state.update_rpm(3850.0);
         rpm_led_state.update(&sim_state);
@@ -454,7 +454,7 @@ mod test {
         container.fill_all_leds = true;
 
         let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
-        let mut rpm_led_state = RpmLedState::new(container);
+        let mut rpm_led_state = RpmGradientEffect::new(container);
 
         sim_state.update_rpm(3850.0);
         rpm_led_state.update(&sim_state);
@@ -485,7 +485,7 @@ mod test {
         container.gradient_on_all = true;
 
         let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
-        let mut rpm_led_state = RpmLedState::new(container);
+        let mut rpm_led_state = RpmGradientEffect::new(container);
 
         sim_state.update_rpm(0.0);
         rpm_led_state.update(&sim_state);
@@ -535,7 +535,7 @@ mod test {
         container.right_to_left = true;
 
         let mut sim_state = RpmSimState::new(0.0, MAX_RPM);
-        let mut rpm_led_state = RpmLedState::new(container);
+        let mut rpm_led_state = RpmGradientEffect::new(container);
 
         sim_state.update_rpm(MAX_RPM * 0.87);
         rpm_led_state.update(&sim_state);

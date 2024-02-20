@@ -18,31 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{num::NonZeroUsize, time::Duration};
-
-use csscolorparser::Color;
 use serde::Deserialize;
 
-use super::{color_from_str, default_non_zero, duration_from_int_ms};
+use super::SimpleBlinkContainer;
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub struct FlagContainer {
-    #[serde(default)]
-    pub description: String,
-    pub is_enabled: bool,
-    pub led_count: NonZeroUsize,
-    #[serde(default = "default_non_zero")]
-    pub start_position: NonZeroUsize,
-    #[serde(deserialize_with = "color_from_str")]
-    pub color: Color,
-    pub blink_enabled: bool,
-    #[serde(default, deserialize_with = "duration_from_int_ms")]
-    pub blink_delay: Duration,
-    #[serde(default)]
-    pub dual_blink_timing_enabled: bool,
-    #[serde(default, deserialize_with = "duration_from_int_ms")]
-    pub off_delay: Duration,
-    #[serde(default, deserialize_with = "duration_from_int_ms")]
-    pub on_delay: Duration,
-}
+#[serde(transparent)]
+pub struct FlagContainer(pub SimpleBlinkContainer);

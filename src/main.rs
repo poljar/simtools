@@ -23,7 +23,7 @@ use std::{fs::File, io::BufReader, path::PathBuf};
 use anyhow::{Context as _, Result};
 use cairo::{Format, ImageSurface};
 use clap::{Parser, Subcommand};
-use led::effects::groups::GroupState;
+use led::effects::groups::EffectGroup;
 
 use crate::{
     devices::{LmxWheel, USBD480Display},
@@ -114,7 +114,7 @@ async fn main() -> Result<()> {
 
             let profile: LedProfile =
                 serde_json::from_reader(reader).context("Could not deserialize the LED profile")?;
-            let root_group = GroupState::root(profile);
+            let root_group = EffectGroup::root(profile);
 
             lmx.rpm_leds_mut().run_led_profile(root_group).await?;
         }

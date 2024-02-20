@@ -153,51 +153,48 @@ pub enum LedConfiguration {
     Off,
 }
 
-#[cfg(test)]
-mod test {
-    #[macro_export]
-    macro_rules! led {
-        (off) => {
-            $crate::led::effects::LedConfiguration::Off
-        };
-        (($r:expr, $g:expr, $b:expr)) => {
-            $crate::led::effects::LedConfiguration::On {
-                color: ::csscolorparser::Color::new($r, $g, $b, 1.0),
-            }
-        };
-        ($color:expr) => {
-            $crate::led::effects::LedConfiguration::On {
-                color: ::csscolorparser::Color::from_html($color).unwrap(),
-            }
-        };
-    }
+#[macro_export]
+macro_rules! led {
+    (off) => {
+        $crate::led::effects::LedConfiguration::Off
+    };
+    (($r:expr, $g:expr, $b:expr)) => {
+        $crate::led::effects::LedConfiguration::On {
+            color: ::csscolorparser::Color::new($r, $g, $b, 1.0),
+        }
+    };
+    ($color:expr) => {
+        $crate::led::effects::LedConfiguration::On {
+            color: ::csscolorparser::Color::from_html($color).unwrap(),
+        }
+    };
+}
 
-    #[macro_export]
-    macro_rules! leds {
-        ($start_position:expr; $color:tt; $n:expr) => {
-            $crate::led::effects::LedGroup {
-                start_position: ::std::num::NonZeroUsize::new($start_position).expect("Invalid start position, must be non-zero"),
-                leds: vec![$crate::led!($color); $n],
-            }
-        };
+#[macro_export]
+macro_rules! leds {
+    ($start_position:expr; $color:tt; $n:expr) => {
+        $crate::led::effects::LedGroup {
+            start_position: ::std::num::NonZeroUsize::new($start_position).expect("Invalid start position, must be non-zero"),
+            leds: vec![$crate::led!($color); $n],
+        }
+    };
 
-        ($color:tt; $n:expr) => {
-            leds![1; $color; $n]
-        };
+    ($color:tt; $n:expr) => {
+        leds![1; $color; $n]
+    };
 
-        ($start_position:expr; $($color:tt),+ $(,)?) => {{
-            let leds = vec![
-                $($crate::led!($color)),+
-            ];
+    ($start_position:expr; $($color:tt),+ $(,)?) => {{
+        let leds = vec![
+            $($crate::led!($color)),+
+        ];
 
-            LedGroup {
-                start_position: ::std::num::NonZeroUsize::new($start_position).expect("Invalid start position, must be non-zero"),
-                leds
-            }
-        }};
+        LedGroup {
+            start_position: ::std::num::NonZeroUsize::new($start_position).expect("Invalid start position, must be non-zero"),
+            leds
+        }
+    }};
 
-        ($($color:tt),+ $(,)?) => {{
-            leds![1; $($color),+]
-        }};
-    }
+    ($($color:tt),+ $(,)?) => {{
+        leds![1; $($color),+]
+    }};
 }

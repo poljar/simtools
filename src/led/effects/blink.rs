@@ -22,9 +22,10 @@ use std::{num::NonZeroUsize, time::Instant};
 
 use simetry::Moment;
 
-use super::{BlinkState, LedConfiguration, LedEffect, LedGroup, MomentExt};
-use crate::led::profiles::{
-    flag::FlagContainer, redline::RedlineReachedContainer, SimpleBlinkContainer,
+use super::{BlinkState, LedEffect, LedGroup, MomentExt};
+use crate::{
+    led::profiles::{flag::FlagContainer, redline::RedlineReachedContainer, SimpleBlinkContainer},
+    leds,
 };
 
 #[derive(Debug)]
@@ -44,7 +45,8 @@ pub enum EffectCondition {
 pub struct BlinkEffect {
     condition: EffectCondition,
     container: SimpleBlinkContainer,
-    state: LedGroup,
+    on_leds: LedGroup,
+    off_leds: LedGroup,
     blink_state: BlinkState,
 }
 
@@ -58,7 +60,8 @@ impl BlinkEffect {
 
         Self {
             condition: EffectCondition::Flag { color: flag_color },
-            state: LedGroup::with_color(container.color.clone(), start_position, led_count),
+            on_leds: LedGroup::with_color(container.color.clone(), start_position, led_count),
+            off_leds: leds![start_position.into(); off; led_count.into()],
             container,
             blink_state: BlinkState::default(),
         }
@@ -69,7 +72,8 @@ impl BlinkEffect {
 
         Self {
             condition: EffectCondition::RedLine,
-            state: LedGroup::with_color(container.color.clone(), start_position, led_count),
+            on_leds: LedGroup::with_color(container.color.clone(), start_position, led_count),
+            off_leds: leds![start_position.into(); off; led_count.into()],
             container,
             blink_state: BlinkState::default(),
         }
@@ -134,24 +138,6 @@ impl BlinkEffect {
         };
 
         let next_blink_state = self.calculate_next_blink_state(is_enabled);
-
-        let leds_enabled = match next_blink_state {
-            BlinkState::NotBlinking => is_enabled,
-            BlinkState::LedsTurnedOff { .. } => false,
-            BlinkState::LedsTurnedOn { .. } => true,
-        };
-
-        // TODO: We could avoid this for loop if we had two LED arrays, one for the
-        // turned on state, one for the turned off state. Then we just flip a
-        // boolean.
-        for led in &mut self.state.leds {
-            *led = if leds_enabled {
-                LedConfiguration::On { color: self.container.color.clone() }
-            } else {
-                LedConfiguration::Off
-            };
-        }
-
         self.blink_state = next_blink_state;
     }
 }
@@ -162,7 +148,7 @@ impl LedEffect for BlinkEffect {
     }
 
     fn start_led(&self) -> NonZeroUsize {
-        self.state.start_position()
+        self.on_leds.start_position()
     }
 
     fn description(&self) -> &str {
@@ -170,19 +156,18 @@ impl LedEffect for BlinkEffect {
     }
 
     fn leds(&self) -> Box<dyn Iterator<Item = &LedGroup> + '_> {
-        Box::new(std::iter::once(&self.state))
+        Box::new(std::iter::once(match self.blink_state {
+            BlinkState::NotBlinking | BlinkState::LedsTurnedOff { .. } => &self.off_leds,
+            BlinkState::LedsTurnedOn { .. } => &self.on_leds,
+        }))
     }
 
     fn disable(&mut self) {
         self.blink_state = BlinkState::NotBlinking;
-
-        for led in &mut self.state.leds {
-            *led = LedConfiguration::Off;
-        }
     }
 
     fn led_count(&self) -> usize {
-        self.state.leds.len()
+        self.on_leds.leds.len()
     }
 }
 
@@ -241,7 +226,7 @@ pub mod test {
 
         assert_eq!(
             &leds![14; off; 3],
-            &state.state,
+            state.leds().next().unwrap(),
             "The LEDs should stay off if no flag is waving"
         );
 
@@ -250,7 +235,7 @@ pub mod test {
 
         assert_eq!(
             &leds![14; off; 3],
-            &state.state,
+            state.leds().next().unwrap(),
             "The white flag should not turn on LEDs for the yellow flag"
         );
 
@@ -259,14 +244,14 @@ pub mod test {
 
         assert_eq!(
             &leds![14; "Yellow"; 3],
-            &state.state,
+            state.leds().next().unwrap(),
             "The yellow flag should turn all the LEDs on"
         );
 
         state.update(&flags);
         assert_eq!(
             &leds![14; "Yellow"; 3],
-            &state.state,
+            state.leds().next().unwrap(),
             "The state of the LEDs should not change unless the blink delay has expired"
         );
 
@@ -275,14 +260,14 @@ pub mod test {
 
         assert_eq!(
             &leds![14; off; 3],
-            &state.state,
+            state.leds().next().unwrap(),
             "The LEDs should be turned off after the blink delay has passed"
         );
 
         state.update(&flags);
         assert_eq!(
             &leds![14; off; 3],
-            &state.state,
+            state.leds().next().unwrap(),
             "The state of the LEDs should not change unless the blink delay has expired"
         );
 
@@ -291,7 +276,7 @@ pub mod test {
 
         assert_eq!(
             &leds![14; "yellow"; 3],
-            &state.state,
+            state.leds().next().unwrap(),
             "The LEDs should be turned on again after the blink delay has passed"
         );
 
@@ -300,7 +285,7 @@ pub mod test {
 
         assert_eq!(
             &leds![14; off; 3],
-            &state.state,
+            state.leds().next().unwrap(),
             "The LEDs should be turned off if the flag stopped waving"
         );
     }

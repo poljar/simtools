@@ -23,7 +23,7 @@ use std::{fs::File, io::BufReader, path::PathBuf};
 use anyhow::{Context as _, Result};
 use cairo::{Format, ImageSurface};
 use clap::{Parser, Subcommand};
-use led::state::groups::GroupState;
+use led::effects::groups::GroupState;
 
 use crate::{
     devices::{LmxWheel, USBD480Display},

@@ -25,8 +25,8 @@ use simetry::Moment;
 use uom::si::{f64::AngularVelocity, ratio::ratio};
 
 use crate::led::{
+    effects::{BlinkState, LedConfiguration, LedEffect, Leds, MomentExt},
     profiles::rpm::RpmContainer,
-    state::{BlinkState, LedConfiguration, LedEffect, Leds, MomentExt},
 };
 
 // TODO: Support LED dimming, aka the [`RpmContainer::use_led_dimming`] setting.

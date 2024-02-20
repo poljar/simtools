@@ -24,7 +24,7 @@ use hidapi::{HidApi, HidDevice};
 use simetry::assetto_corsa_competizione::Client;
 use strum::{EnumIter, IntoEnumIterator};
 
-use crate::led::state::{groups::GroupState, LedConfiguration, LedEffect, Leds};
+use crate::led::effects::{groups::GroupState, LedConfiguration, LedEffect, Leds};
 
 pub struct LmxLeds {
     device: HidDevice,

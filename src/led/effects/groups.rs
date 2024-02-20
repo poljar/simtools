@@ -232,7 +232,7 @@ mod test {
     use similar_asserts::assert_eq;
 
     use super::*;
-    use crate::{led::state::flag::test::SimState, leds};
+    use crate::{led::effects::flag::test::SimState, leds};
 
     fn container(stack_left_to_right: bool) -> GroupContainer {
         let container = json!({

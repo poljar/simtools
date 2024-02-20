@@ -158,15 +158,15 @@ mod test {
     #[macro_export]
     macro_rules! led {
         (off) => {
-            $crate::led::state::LedConfiguration::Off
+            $crate::led::effects::LedConfiguration::Off
         };
         (($r:expr, $g:expr, $b:expr)) => {
-            $crate::led::state::LedConfiguration::On {
+            $crate::led::effects::LedConfiguration::On {
                 color: ::csscolorparser::Color::new($r, $g, $b, 1.0),
             }
         };
         ($color:expr) => {
-            $crate::led::state::LedConfiguration::On {
+            $crate::led::effects::LedConfiguration::On {
                 color: ::csscolorparser::Color::from_html($color).unwrap(),
             }
         };
@@ -175,7 +175,7 @@ mod test {
     #[macro_export]
     macro_rules! leds {
         ($start_position:expr; $color:tt; $n:expr) => {
-            $crate::led::state::Leds {
+            $crate::led::effects::Leds {
                 start_position: ::std::num::NonZeroUsize::new($start_position).expect("Invalid start position, must be non-zero"),
                 leds: vec![$crate::led!($color); $n],
             }

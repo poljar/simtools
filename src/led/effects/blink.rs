@@ -54,7 +54,6 @@ impl BlinkEffect {
         container: FlagContainer,
         start_position: NonZeroUsize,
     ) -> Self {
-        let container = container.0;
         let led_count = container.led_count;
 
         Self {
@@ -66,7 +65,6 @@ impl BlinkEffect {
     }
 
     pub fn redline(container: RedlineReachedContainer, start_position: NonZeroUsize) -> Self {
-        let container = container.0;
         let led_count = container.led_count;
 
         Self {
@@ -79,7 +77,7 @@ impl BlinkEffect {
 
     #[cfg(test)]
     pub fn new(flag_color: FlagColor, container: FlagContainer) -> Self {
-        let start_position = container.0.start_position;
+        let start_position = container.start_position;
         Self::flag(flag_color, container, start_position)
     }
 

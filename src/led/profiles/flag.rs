@@ -18,10 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use serde::Deserialize;
-
 use super::SimpleBlinkContainer;
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(transparent)]
-pub struct FlagContainer(pub SimpleBlinkContainer);
+pub type FlagContainer = SimpleBlinkContainer;

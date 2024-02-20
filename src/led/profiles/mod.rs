@@ -97,12 +97,12 @@ impl LedContainer {
         match self {
             LedContainer::Rpm(c) => c.start_position,
             LedContainer::RpmSegments(c) => c.start_position,
-            LedContainer::RedlineReached(c) => c.0.start_position,
             LedContainer::SpeedLimiterAnimation(c) => c.start_position,
             LedContainer::Group(c) => c.start_position(),
-            LedContainer::BlueFlag(c) => c.0.start_position,
-            LedContainer::WhiteFlag(c) => c.0.start_position,
-            LedContainer::YellowFlag(c) => c.0.start_position,
+            LedContainer::BlueFlag(c)
+            | LedContainer::WhiteFlag(c)
+            | LedContainer::YellowFlag(c)
+            | LedContainer::RedlineReached(c) => c.start_position,
             LedContainer::Unknown { start_position, .. } => *start_position,
         }
     }

@@ -23,15 +23,10 @@ use std::{fs::File, io::BufReader, path::PathBuf};
 use anyhow::{Context as _, Result};
 use cairo::{Format, ImageSurface};
 use clap::{Parser, Subcommand};
-use led::effects::groups::EffectGroup;
-
-use crate::{
+use simtools::{
     devices::{LmxWheel, USBD480Display},
-    led::profiles::LedProfile,
+    led::{effects::groups::EffectGroup, profiles::LedProfile},
 };
-
-mod devices;
-mod led;
 
 #[derive(Debug, Parser)]
 struct Cli {

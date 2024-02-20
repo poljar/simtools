@@ -1,0 +1,26 @@
+[package]
+name = "simtools"
+version = "0.1.0"
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+rust-version = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+colorgrad = "0.6.2"
+csscolorparser = "0.6.2"
+embedded-graphics = "0.8.1"
+hidapi = { version = "2.6.0" }
+itertools = "0.12.1"
+rusb = "0.9.3"
+strum = { version = "0.26.1", features = ["derive"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+simetry = { workspace = true }
+uuid = { workspace = true }
+uom = { workspace = true }
+
+[dev-dependencies]
+similar-asserts = { workspace = true }

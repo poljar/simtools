@@ -736,29 +736,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "01cda141df6706de531b6c46c3a33ecca755538219bd484262fa09410c13539c"
 
 [[package]]
-name = "lmx-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cairo-rs",
- "clap",
- "colorgrad",
- "csscolorparser",
- "embedded-graphics",
- "hidapi",
- "itertools",
- "rusb",
- "serde",
- "serde_json",
- "simetry",
- "similar-asserts",
- "strum",
- "tokio",
- "uom",
- "uuid",
-]
-
-[[package]]
 name = "log"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1099,6 +1076,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
+name = "simctl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cairo-rs",
+ "clap",
+ "colorgrad",
+ "csscolorparser",
+ "embedded-graphics",
+ "hidapi",
+ "itertools",
+ "rusb",
+ "serde",
+ "serde_json",
+ "simetry",
+ "similar-asserts",
+ "simtools",
+ "strum",
+ "tokio",
+ "uom",
+ "uuid",
+]
+
+[[package]]
 name = "simetry"
 version = "0.2.2"
 source = "git+https://github.com/poljar/simetry?rev=267833877058b2881b235dccdd59b40e00e6dd1d#267833877058b2881b235dccdd59b40e00e6dd1d"
@@ -1141,6 +1142,28 @@ checksum = "e041bb827d1bfca18f213411d51b665309f1afb37a04a5d1464530e13779fc0f"
 dependencies = [
  "console",
  "similar",
+]
+
+[[package]]
+name = "simtools"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "colorgrad",
+ "csscolorparser",
+ "embedded-graphics",
+ "hidapi",
+ "itertools",
+ "rusb",
+ "serde",
+ "serde_json",
+ "simetry",
+ "similar-asserts",
+ "strum",
+ "tokio",
+ "uom",
+ "uuid",
 ]
 
 [[package]]

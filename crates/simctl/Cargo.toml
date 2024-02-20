@@ -1,0 +1,17 @@
+[package]
+name = "simctl"
+version = "0.1.0"
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+rust-version = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+cairo-rs = "0.19.2"
+clap = { version = "4.5.1", features = ["derive"] }
+serde_json = { workspace = true }
+simetry = { workspace = true }
+simtools = { path = "../simtools" }
+tokio = { workspace = true }

@@ -35,7 +35,7 @@ pub trait LedEffect: Debug {
     fn update(&mut self, sim_state: &dyn Moment);
     /// Disable all the LEDs this effect controls.
     fn disable(&mut self);
-    /// The start LED of this [`LedEffec`], this is the position of the LED
+    /// The start LED of this [`LedEffect`], this is the position of the LED
     /// where the first LED in the [`LedEffect::leds()`] iterator should be
     /// applied to on the device.
     fn start_led(&self) -> NonZeroUsize;
@@ -64,6 +64,9 @@ pub trait MomentExt: Moment {
         };
 
         let error_margin = ERROR_MARGIN_PERCENTAGE * max_rpm;
+
+        // TODO: Add an optional argument that contains a per car and per gear DB of redlines or
+        // rather ideal shiftpoints.
 
         // If we're within 2% of the MAX RPM of a car, we're going to consider this to
         // be at the redline.
@@ -114,12 +117,12 @@ pub struct LedGroup {
 }
 
 impl LedGroup {
-    /// Create a new [`Leds`] group with the given start position and LED count.
+    /// Create a new [`LedGroup`] group with the given start position and LED count.
     pub fn new(start_position: NonZeroUsize, led_count: NonZeroUsize) -> Self {
         Self { start_position, leds: vec![LedConfiguration::default(); led_count.get()] }
     }
 
-    /// Create a new [`Leds`] group with the given start position and LED count,
+    /// Create a new [`LedGroup`] group with the given start position and LED count,
     /// each LED will be enabled and configured to display the given
     /// [`Color`].
     pub fn with_color(color: Color, start_position: NonZeroUsize, led_count: NonZeroUsize) -> Self {

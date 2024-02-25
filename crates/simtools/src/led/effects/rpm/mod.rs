@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 pub mod gradient;
+pub mod segments;
 
 #[cfg(test)]
 pub mod test {

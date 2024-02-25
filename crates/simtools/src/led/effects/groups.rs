@@ -73,9 +73,9 @@ pub enum SimpleConditionstate {
 
 #[derive(Debug)]
 pub struct EffectGroup {
-    start_position: NonZeroUsize,
-    condition: GroupCondition,
-    states: Vec<Box<dyn LedEffect>>,
+    pub(super) start_position: NonZeroUsize,
+    pub(super) condition: GroupCondition,
+    pub(super) states: Vec<Box<dyn LedEffect>>,
 }
 
 impl EffectGroup {

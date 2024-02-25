@@ -19,8 +19,8 @@
 // SOFTWARE.
 
 //! Module containing parsers for popular LED light profile file formats for Sim
-//! racing which configure how LED lights on Sim racing dashboards and steering
-//! wheels should operate.
+//! racing. The profiles configure how LED lights on Sim racing dashboards
+//! and steering wheels should operate.
 
 use std::{num::NonZeroUsize, time::Duration};
 

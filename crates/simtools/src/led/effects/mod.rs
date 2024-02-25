@@ -47,47 +47,6 @@ pub trait LedEffect: Debug {
     }
 }
 
-/// Extension trait for the [`Moment`] trait.
-///
-/// This extension trait contains values that get calculated from the values
-/// contained in the [`Moment`] trait.
-pub trait MomentExt: Moment {
-    fn redline_reached(&self) -> bool {
-        const ERROR_MARGIN_PERCENTAGE: f64 = 0.02;
-
-        let Some(rpm) = self.vehicle_engine_rotation_speed() else {
-            return false;
-        };
-
-        let Some(max_rpm) = self.vehicle_max_engine_rotation_speed() else {
-            return false;
-        };
-
-        let error_margin = ERROR_MARGIN_PERCENTAGE * max_rpm;
-
-        // TODO: Add an optional argument that contains a per car and per gear DB of redlines or
-        // rather ideal shiftpoints.
-
-        // If we're within 2% of the MAX RPM of a car, we're going to consider this to
-        // be at the redline.
-        (max_rpm - rpm).abs() < error_margin
-    }
-
-    fn is_engine_running(&self) -> bool {
-        let Some(is_starting) = self.is_starter_on() else {
-            return false;
-        };
-
-        let Some(rpm) = self.vehicle_engine_rotation_speed() else {
-            return false;
-        };
-
-        !is_starting && rpm.value > 0.0
-    }
-}
-
-impl<T> MomentExt for T where T: Moment + ?Sized {}
-
 /// Common state for LED effects which support blinking LEDs.
 #[derive(Debug, Default, Clone, Copy)]
 pub enum BlinkState {
@@ -117,13 +76,14 @@ pub struct LedGroup {
 }
 
 impl LedGroup {
-    /// Create a new [`LedGroup`] group with the given start position and LED count.
+    /// Create a new [`LedGroup`] group with the given start position and LED
+    /// count.
     pub fn new(start_position: NonZeroUsize, led_count: NonZeroUsize) -> Self {
         Self { start_position, leds: vec![LedConfiguration::default(); led_count.get()] }
     }
 
-    /// Create a new [`LedGroup`] group with the given start position and LED count,
-    /// each LED will be enabled and configured to display the given
+    /// Create a new [`LedGroup`] group with the given start position and LED
+    /// count, each LED will be enabled and configured to display the given
     /// [`Color`].
     pub fn with_color(color: Color, start_position: NonZeroUsize, led_count: NonZeroUsize) -> Self {
         Self { start_position, leds: vec![LedConfiguration::On { color }; led_count.get()] }

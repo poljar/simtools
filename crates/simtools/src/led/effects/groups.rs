@@ -28,11 +28,14 @@ use simetry::Moment;
 use super::{
     blink::{BlinkEffect, FlagColor},
     rpm::gradient::RpmGradientEffect,
-    LedEffect, LedGroup, MomentExt,
+    LedEffect, LedGroup,
 };
-use crate::led::profiles::{
-    groups::{Formula, StackingType},
-    GroupContainer, LedContainer, LedProfile,
+use crate::{
+    led::profiles::{
+        groups::{Formula, StackingType},
+        GroupContainer, LedContainer, LedProfile,
+    },
+    moment::MomentExt,
 };
 
 #[derive(Debug)]

@@ -22,10 +22,11 @@ use std::{num::NonZeroUsize, time::Instant};
 
 use simetry::Moment;
 
-use super::{BlinkState, LedEffect, LedGroup, MomentExt};
+use super::{BlinkState, LedEffect, LedGroup};
 use crate::{
     led::profiles::{flag::FlagContainer, redline::RedlineReachedContainer, SimpleBlinkContainer},
     leds,
+    moment::MomentExt,
 };
 
 #[derive(Debug)]

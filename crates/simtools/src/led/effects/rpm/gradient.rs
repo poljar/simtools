@@ -24,9 +24,12 @@ use colorgrad::{CustomGradient, Gradient};
 use simetry::Moment;
 use uom::si::{f64::AngularVelocity, ratio::ratio};
 
-use crate::led::{
-    effects::{BlinkState, LedConfiguration, LedEffect, LedGroup, MomentExt},
-    profiles::rpm::RpmContainer,
+use crate::{
+    led::{
+        effects::{BlinkState, LedConfiguration, LedEffect, LedGroup},
+        profiles::rpm::RpmContainer,
+    },
+    moment::MomentExt,
 };
 
 // TODO: Support LED dimming, aka the [`RpmContainer::use_led_dimming`] setting.

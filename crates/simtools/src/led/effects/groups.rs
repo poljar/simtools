@@ -232,10 +232,9 @@ impl LedEffect for EffectGroup {
 #[cfg(test)]
 mod test {
     use serde_json::json;
-    use similar_asserts::assert_eq;
 
     use super::*;
-    use crate::{led::effects::blink::test::SimState, leds};
+    use crate::{assert_led_group_eq, led::effects::blink::test::SimState, leds};
 
     fn container(stack_left_to_right: bool) -> GroupContainer {
         let container = json!({
@@ -285,73 +284,60 @@ mod test {
     #[test]
     fn white_flag() {
         let container = container(false);
-        let mut state = EffectGroup::new(container);
+        let mut effect = EffectGroup::new(container);
         let mut flags = SimState::new();
 
-        state.update(&flags);
+        effect.update(&flags);
 
-        assert_eq!(
-            &leds![3; off; 3],
-            state.states[0].leds().next().unwrap(),
-            "The LEDs should stay off if no flag is waving"
-        );
-
-        assert_eq!(
-            &leds![16; off; 3],
-            state.states[1].leds().next().unwrap(),
+        assert_led_group_eq!(
+            [
+                [3; off; 3],
+                [16; off; 3],
+            ],
+            effect,
             "The LEDs should stay off if no flag is waving"
         );
 
         flags.inner.white = true;
-        state.update(&flags);
+        effect.update(&flags);
 
-        assert_eq!(
-            &leds![3; "White"; 3],
-            state.states[0].leds().next().unwrap(),
-            "The yellow flag should turn all the LEDs on"
-        );
-
-        assert_eq!(
-            &leds![16; "White"; 3],
-            state.states[1].leds().next().unwrap(),
-            "The yellow flag should turn all the LEDs on"
+        assert_led_group_eq!(
+            [
+                [3; "White"; 3],
+                [16; "White"; 3],
+            ],
+            effect,
+            "The white flag should turn all the LEDs on"
         );
     }
 
     #[test]
     fn white_flag_left_to_right_stacking() {
         let container = container(true);
-        let mut state = EffectGroup::new(container);
-
+        let mut effect = EffectGroup::new(container);
         let mut flags = SimState::new();
 
-        state.update(&flags);
+        effect.update(&flags);
 
-        assert_eq!(
-            &leds![3; off; 3],
-            state.states[0].leds().next().unwrap(),
-            "The LEDs should stay off if no flag is waving"
-        );
-
-        assert_eq!(
-            &leds![6; off; 3],
-            state.states[1].leds().next().unwrap(),
+        assert_led_group_eq!(
+            [
+                [3; off; 3],
+                [6; off; 3],
+            ],
+            effect,
             "The LEDs should stay off if no flag is waving"
         );
 
         flags.inner.white = true;
-        state.update(&flags);
+        effect.update(&flags);
 
-        assert_eq!(
-            &leds![3; "White"; 3],
-            state.states[0].leds().next().unwrap(),
-            "The yellow flag should turn all the LEDs on"
-        );
-
-        assert_eq!(
-            &leds![6; "White"; 3],
-            state.states[1].leds().next().unwrap(),
-            "The yellow flag should turn all the LEDs on"
+        assert_led_group_eq!(
+            [
+                [3; "White"; 3],
+                [6; "White"; 3],
+            ],
+            effect,
+            "The white yellow flag should turn all the LEDs on"
         );
     }
 }

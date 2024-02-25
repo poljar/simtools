@@ -63,5 +63,44 @@ macro_rules! leds {
 
 #[macro_export]
 macro_rules! assert_led_group_eq {
-    () => {};
+    ([$($tt:tt),* $(,)?], $segments:expr $(,)?) => {
+        assert_led_group_eq!(
+            [$({ $tt });*],
+            $segments,
+            "The LED segment doesn't match to the asserted LEDs."
+        )
+    };
+
+    ([$($tt:tt),* $(,)?], $segments:expr, $description:literal $(,)?) => {
+        let mut index: isize = -1_isize;
+
+        assert_led_group_eq!(
+            @inner
+            [$({
+                { index += 1_isize; index };
+                $tt
+            });*],
+            $segments,
+            $description
+        )
+    };
+
+    (@inner [$({$index:expr; $tt:tt});+ $(,)?], $segments:expr, $description:expr) => {
+        $({
+            let index = $index;
+
+            let expected = $crate::leds!$tt;
+            let computed = $segments
+                .leds()
+                .nth(index as usize)
+                .expect(&format!("Couldn't find the {index}th LED segment"));
+
+            similar_asserts::assert_eq!(
+                expected.start_position(),
+                computed.start_position(),
+                "The start position of the first LED in the LedGroups should match"
+            );
+            similar_asserts::assert_eq!(&expected, computed, $description);
+        })*
+    };
 }

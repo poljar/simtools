@@ -86,8 +86,8 @@ impl BlinkEffect {
         Self::flag(flag_color, container, start_position)
     }
 
-    fn calculate_next_blink_state(&self, is_flag_enabled: bool) -> BlinkState {
-        if self.container.blink_enabled && is_flag_enabled {
+    fn calculate_next_blink_state(&self, should_blink: bool) -> BlinkState {
+        if self.container.blink_enabled && should_blink {
             match self.blink_state {
                 BlinkState::NotBlinking => {
                     BlinkState::LedsTurnedOn { state_change: Instant::now() }

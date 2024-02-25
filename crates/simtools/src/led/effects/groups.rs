@@ -43,7 +43,7 @@ pub enum GroupCondition {
     AlwaysOn,
     GameStarted,
     CarStarted { duration: Duration, state: SimpleConditionstate },
-    Conditional { formula: Formula },
+    Expression { formula: Formula },
 }
 
 impl From<&GroupContainer> for GroupCondition {
@@ -55,7 +55,7 @@ impl From<&GroupContainer> for GroupCondition {
                 GroupCondition::CarStarted { duration: c.duration, state: Default::default() }
             }
             GroupContainer::Conditional(c) => {
-                GroupCondition::Conditional { formula: c.trigger_formula.clone() }
+                GroupCondition::Expression { formula: c.trigger_formula.clone() }
             }
         }
     }
@@ -196,7 +196,7 @@ impl EffectGroup {
                 }
             },
             // TODO: Support ncalc style expressions.
-            GroupCondition::Conditional { .. } => (),
+            GroupCondition::Expression { .. } => (),
         }
     }
 }

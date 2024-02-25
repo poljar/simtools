@@ -30,17 +30,22 @@ pub mod rpm;
 pub trait LedEffect: Debug {
     /// Get an iterator over the LEDs this effect controls.
     fn leds(&self) -> Box<dyn Iterator<Item = &LedGroup> + '_>;
+
     /// Update the state of the effect with the latest [`Moment`] in the
     /// simulator.
     fn update(&mut self, sim_state: &dyn Moment);
+
     /// Disable all the LEDs this effect controls.
     fn disable(&mut self);
+
     /// The start LED of this [`LedEffect`], this is the position of the LED
     /// where the first LED in the [`LedEffect::leds()`] iterator should be
     /// applied to on the device.
     fn start_led(&self) -> NonZeroUsize;
+
     /// The description of this [`LedEffect`].
     fn description(&self) -> &str;
+
     /// The number of LEDs this [`LedEffect`] controls.
     fn led_count(&self) -> usize {
         self.leds().map(|led_state| led_state.leds().len()).sum()

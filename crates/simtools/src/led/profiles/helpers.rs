@@ -36,10 +36,66 @@ pub fn color_from_str<'de, D>(deserializer: D) -> Result<Color, D::Error>
 where
     D: Deserializer<'de>,
 {
-    String::deserialize(deserializer)
-        .and_then(|color| Color::from_html(color).map_err(serde::de::Error::custom))
+    let string = String::deserialize(deserializer)?;
+
+    let error = |e, source| {
+        let message =
+            format!("Couldn't parse a a digit into a RGB8 value, source: {source}: {e:?}");
+
+        serde::de::Error::custom(message)
+    };
+
+    // First check it it's just a comma separated list of u8 values. If it isn't
+    // then let [`Color::from_html`] handle the parsing.
+    let numbers: Vec<&str> = string.split(',').map(|n| n.trim()).collect();
+
+    if numbers.len() == 3 {
+        let r = numbers[0].parse().map_err(|e| error(e, numbers[0]))?;
+        let g = numbers[1].parse().map_err(|e| error(e, numbers[1]))?;
+        let b = numbers[2].parse().map_err(|e| error(e, numbers[2]))?;
+
+        Ok(Color::from_rgba8(r, g, b, 255))
+    } else {
+        Color::from_html(string).map_err(serde::de::Error::custom)
+    }
 }
 
 pub fn default_non_zero() -> NonZeroUsize {
     NonZeroUsize::MIN
+}
+
+pub fn default_true() -> bool {
+    true
+}
+
+#[cfg(test)]
+mod test {
+    use serde_json::json;
+
+    use super::*;
+
+    #[derive(Debug, Deserialize)]
+    struct TestProfile {
+        #[serde(deserialize_with = "color_from_str")]
+        color: Color,
+    }
+
+    #[test]
+    fn color_parsing() {
+        let TestProfile { color } = serde_json::from_value(json!({"color": "Yellow"}))
+            .expect("We should be able to parse a color with a name");
+        assert_eq!(color.to_rgba8(), [255, 255, 0, 255]);
+
+        let TestProfile { color } = serde_json::from_value(json!({"color": "#ff00ff"}))
+            .expect("We should be able to parse a color with a name");
+        assert_eq!(color.to_rgba8(), [255, 0, 255, 255]);
+
+        let TestProfile { color } = serde_json::from_value(json!({"color": "0, 255, 0"}))
+            .expect("We should be able to parse a color with a name");
+        assert_eq!(color.to_rgba8(), [0, 255, 0, 255]);
+
+        serde_json::from_value::<TestProfile>(json!({"color": "0, 700, 0"})).expect_err(
+            "We should not be able to parse a color value that is outside of our u8 range",
+        );
+    }
 }

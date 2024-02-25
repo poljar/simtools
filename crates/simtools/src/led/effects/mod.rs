@@ -18,7 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{fmt::Debug, num::NonZeroUsize, time::Instant};
+use std::{
+    fmt::Debug,
+    num::NonZeroUsize,
+    time::{Duration, Instant},
+};
 
 use csscolorparser::Color;
 use simetry::Moment;
@@ -68,6 +72,70 @@ pub enum BlinkState {
         /// The instant in time when the LEDs turned on.
         state_change: Instant,
     },
+}
+
+#[derive(Debug, Default, Clone)]
+pub enum BlinkConfiguration {
+    #[default]
+    Disabled,
+    Enabled {
+        state: BlinkState,
+        timings: BlinkTimings,
+    },
+}
+
+impl BlinkConfiguration {
+    pub fn disable(&mut self) {
+        if let BlinkConfiguration::Enabled { state, .. } = self {
+            *state = BlinkState::NotBlinking;
+        }
+    }
+
+    pub fn update(&mut self, should_blink: bool) {
+        if let BlinkConfiguration::Enabled { state, timings, .. } = self {
+            if should_blink {
+                match state {
+                    BlinkState::NotBlinking => {
+                        *state = BlinkState::LedsTurnedOn { state_change: Instant::now() }
+                    }
+                    BlinkState::LedsTurnedOff { state_change } => {
+                        if state_change.elapsed() >= timings.off_timeout() {
+                            *state = BlinkState::LedsTurnedOn { state_change: Instant::now() }
+                        }
+                    }
+                    BlinkState::LedsTurnedOn { state_change } => {
+                        if state_change.elapsed() > timings.on_timeout() {
+                            *state = BlinkState::LedsTurnedOff { state_change: Instant::now() }
+                        }
+                    }
+                }
+            } else {
+                *state = BlinkState::NotBlinking;
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum BlinkTimings {
+    Single { timeout: Duration },
+    Double { on_timeout: Duration, off_timeout: Duration },
+}
+
+impl BlinkTimings {
+    pub fn on_timeout(&self) -> Duration {
+        match self {
+            BlinkTimings::Single { timeout } => *timeout,
+            BlinkTimings::Double { on_timeout, .. } => *on_timeout,
+        }
+    }
+
+    pub fn off_timeout(&self) -> Duration {
+        match self {
+            BlinkTimings::Single { timeout } => *timeout,
+            BlinkTimings::Double { off_timeout, .. } => *off_timeout,
+        }
+    }
 }
 
 /// A group of LEDs an [`LedEffect`] produces.

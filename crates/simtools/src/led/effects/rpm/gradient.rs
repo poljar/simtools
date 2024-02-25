@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{num::NonZeroUsize, time::Instant};
+use std::num::NonZeroUsize;
 
 use colorgrad::{CustomGradient, Gradient};
 use simetry::Moment;
@@ -29,7 +29,9 @@ use uom::si::{
 
 use crate::{
     led::{
-        effects::{BlinkState, LedConfiguration, LedEffect, LedGroup},
+        effects::{
+            BlinkConfiguration, BlinkState, BlinkTimings, LedConfiguration, LedEffect, LedGroup,
+        },
         profiles::rpm::RpmContainer,
     },
     moment::MomentExt,
@@ -42,7 +44,7 @@ pub struct RpmGradientEffect {
     container: RpmContainer,
     gradient: Gradient,
     state: LedGroup,
-    blink_state: BlinkState,
+    blink_configuration: BlinkConfiguration,
 }
 
 impl RpmGradientEffect {
@@ -58,10 +60,19 @@ impl RpmGradientEffect {
                  types and a domain that's guaranteed to be at lest 0 -> 0",
             );
 
+        let blink_configuration = if container.blink_enabled {
+            BlinkConfiguration::Enabled {
+                state: Default::default(),
+                timings: BlinkTimings::Single { timeout: container.blink_delay },
+            }
+        } else {
+            BlinkConfiguration::Disabled
+        };
+
         Self {
             state: LedGroup::new(start_position, container.led_count),
             gradient,
-            blink_state: Default::default(),
+            blink_configuration,
             container,
         }
     }
@@ -94,10 +105,8 @@ impl RpmGradientEffect {
         (percentage_of_leds_to_turn_on * led_count as f64).floor::<ratio>().get::<ratio>() as usize
     }
 
-    fn calculate_next_blink_state(&self, sim_state: &dyn Moment) -> BlinkState {
+    fn calculate_next_blink_state(&mut self, sim_state: &dyn Moment) {
         let redline_reached = sim_state.redline_reached();
-        let blink_enabled = self.container.blink_enabled;
-
         let blink = if self.container.blink_on_last_gear {
             true
         } else {
@@ -105,29 +114,7 @@ impl RpmGradientEffect {
             sim_state.vehicle_gear() != Some(6)
         };
 
-        if redline_reached && blink_enabled && blink {
-            match &self.blink_state {
-                BlinkState::NotBlinking => {
-                    BlinkState::LedsTurnedOn { state_change: Instant::now() }
-                }
-                BlinkState::LedsTurnedOff { state_change } => {
-                    if state_change.elapsed() >= self.container.blink_delay {
-                        BlinkState::LedsTurnedOn { state_change: Instant::now() }
-                    } else {
-                        self.blink_state
-                    }
-                }
-                BlinkState::LedsTurnedOn { state_change } => {
-                    if state_change.elapsed() >= self.container.blink_delay {
-                        BlinkState::LedsTurnedOff { state_change: Instant::now() }
-                    } else {
-                        self.blink_state
-                    }
-                }
-            }
-        } else {
-            BlinkState::NotBlinking
-        }
+        self.blink_configuration.update(redline_reached && blink);
     }
 
     pub fn update(&mut self, sim_state: &dyn Moment) {
@@ -137,8 +124,8 @@ impl RpmGradientEffect {
 
         let rpm_percentage = sim_state.rpm_percentage();
 
-        let next_blink_state = self.calculate_next_blink_state(sim_state);
         let leds_to_turn_on = self.calculate_how_many_leds_to_turn_on(rpm, rpm_percentage);
+        self.calculate_next_blink_state(sim_state);
 
         let led_iterator: Box<dyn Iterator<Item = &mut LedConfiguration>> =
             if self.container.right_to_left {
@@ -155,20 +142,26 @@ impl RpmGradientEffect {
             let gradient_position =
                 if self.container.gradient_on_all { leds_to_turn_on } else { led_number };
 
-            let enabled = match next_blink_state {
-                BlinkState::NotBlinking => {
-                    // If the [`RpmContainer::gradient_on_all`] and [`RpmContainer::fill_all_leds`]
-                    // settings are on, then all LEDs will be turned on and only the color of the
-                    // LEDs will change. Otherwise, only the LEDs that match a certain RPM value
-                    // will be turned on.
-                    if self.container.gradient_on_all && self.container.fill_all_leds {
-                        true
-                    } else {
-                        led_number < leds_to_turn_on
+            let enabled = match self.blink_configuration {
+                BlinkConfiguration::Disabled => led_number < leds_to_turn_on,
+                BlinkConfiguration::Enabled { state, .. } => {
+                    match state {
+                        BlinkState::NotBlinking => {
+                            // If the [`RpmContainer::gradient_on_all`] and
+                            // [`RpmContainer::fill_all_leds`]
+                            // settings are on, then all LEDs will be turned on and only the color
+                            // of the LEDs will change. Otherwise, only the LEDs that match a
+                            // certain RPM value will be turned on.
+                            if self.container.gradient_on_all && self.container.fill_all_leds {
+                                true
+                            } else {
+                                led_number < leds_to_turn_on
+                            }
+                        }
+                        BlinkState::LedsTurnedOff { .. } => false,
+                        BlinkState::LedsTurnedOn { .. } => true,
                     }
                 }
-                BlinkState::LedsTurnedOff { .. } => false,
-                BlinkState::LedsTurnedOn { .. } => true,
             };
 
             *led = if enabled {
@@ -178,8 +171,6 @@ impl RpmGradientEffect {
                 LedConfiguration::Off
             };
         }
-
-        self.blink_state = next_blink_state;
     }
 }
 
@@ -201,7 +192,7 @@ impl LedEffect for RpmGradientEffect {
     }
 
     fn disable(&mut self) {
-        self.blink_state = BlinkState::NotBlinking;
+        self.blink_configuration.disable();
 
         for led in &mut self.state.leds {
             *led = LedConfiguration::Off;
@@ -234,7 +225,7 @@ mod test {
             "GradientOnAll": false,
             "RightToLeft": false,
             "LedCount": 5,
-            "BlinkEnabled": false,
+            "BlinkEnabled": true,
             "BlinkOnLastGear": false,
             "UseLedDimming": false,
             "FillAllLeds": false,

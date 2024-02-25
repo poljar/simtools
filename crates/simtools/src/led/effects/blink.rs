@@ -18,11 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{num::NonZeroUsize, time::Instant};
+use std::num::NonZeroUsize;
 
 use simetry::Moment;
 
-use super::{BlinkState, LedEffect, LedGroup};
+use super::{BlinkConfiguration, BlinkState, BlinkTimings, LedEffect, LedGroup};
 use crate::{
     led::profiles::{flag::FlagContainer, redline::RedlineReachedContainer, SimpleBlinkContainer},
     leds,
@@ -48,7 +48,8 @@ pub struct BlinkEffect {
     container: SimpleBlinkContainer,
     on_leds: LedGroup,
     off_leds: LedGroup,
-    blink_state: BlinkState,
+    enabled: bool,
+    blink_configuration: BlinkConfiguration,
 }
 
 impl BlinkEffect {
@@ -57,26 +58,42 @@ impl BlinkEffect {
         container: FlagContainer,
         start_position: NonZeroUsize,
     ) -> Self {
-        let led_count = container.led_count;
-
-        Self {
-            condition: EffectCondition::Flag { color: flag_color },
-            on_leds: LedGroup::with_color(container.color.clone(), start_position, led_count),
-            off_leds: leds![start_position.into(); off; led_count.into()],
-            container,
-            blink_state: BlinkState::default(),
-        }
+        Self::new_helper(EffectCondition::Flag { color: flag_color }, container, start_position)
     }
 
     pub fn redline(container: RedlineReachedContainer, start_position: NonZeroUsize) -> Self {
+        Self::new_helper(EffectCondition::RedLine, container, start_position)
+    }
+
+    fn new_helper(
+        condition: EffectCondition,
+        container: SimpleBlinkContainer,
+        start_position: NonZeroUsize,
+    ) -> Self {
         let led_count = container.led_count;
 
+        let blink_configuration = if container.blink_enabled {
+            let timings = if container.dual_blink_timing_enabled {
+                BlinkTimings::Double {
+                    on_timeout: container.on_delay,
+                    off_timeout: container.off_delay,
+                }
+            } else {
+                BlinkTimings::Single { timeout: container.blink_delay }
+            };
+
+            BlinkConfiguration::Enabled { state: Default::default(), timings }
+        } else {
+            BlinkConfiguration::Disabled
+        };
+
         Self {
-            condition: EffectCondition::RedLine,
+            condition,
+            enabled: false,
             on_leds: LedGroup::with_color(container.color.clone(), start_position, led_count),
             off_leds: leds![start_position.into(); off; led_count.into()],
             container,
-            blink_state: BlinkState::default(),
+            blink_configuration,
         }
     }
 
@@ -84,44 +101,6 @@ impl BlinkEffect {
     pub fn new(flag_color: FlagColor, container: FlagContainer) -> Self {
         let start_position = container.start_position;
         Self::flag(flag_color, container, start_position)
-    }
-
-    fn calculate_next_blink_state(&self, should_blink: bool) -> BlinkState {
-        if self.container.blink_enabled && should_blink {
-            match self.blink_state {
-                BlinkState::NotBlinking => {
-                    BlinkState::LedsTurnedOn { state_change: Instant::now() }
-                }
-                BlinkState::LedsTurnedOff { state_change } => {
-                    let delay = if self.container.dual_blink_timing_enabled {
-                        self.container.off_delay
-                    } else {
-                        self.container.blink_delay
-                    };
-
-                    if state_change.elapsed() >= delay {
-                        BlinkState::LedsTurnedOn { state_change: Instant::now() }
-                    } else {
-                        self.blink_state
-                    }
-                }
-                BlinkState::LedsTurnedOn { state_change } => {
-                    let delay = if self.container.dual_blink_timing_enabled {
-                        self.container.on_delay
-                    } else {
-                        self.container.blink_delay
-                    };
-
-                    if state_change.elapsed() >= delay {
-                        BlinkState::LedsTurnedOff { state_change: Instant::now() }
-                    } else {
-                        self.blink_state
-                    }
-                }
-            }
-        } else {
-            BlinkState::NotBlinking
-        }
     }
 
     pub fn update(&mut self, state: &dyn Moment) {
@@ -138,8 +117,8 @@ impl BlinkEffect {
             EffectCondition::RedLine => state.redline_reached(),
         };
 
-        let next_blink_state = self.calculate_next_blink_state(is_enabled);
-        self.blink_state = next_blink_state;
+        self.enabled = is_enabled;
+        self.blink_configuration.update(is_enabled);
     }
 }
 
@@ -157,14 +136,26 @@ impl LedEffect for BlinkEffect {
     }
 
     fn leds(&self) -> Box<dyn Iterator<Item = &LedGroup> + '_> {
-        Box::new(std::iter::once(match self.blink_state {
-            BlinkState::NotBlinking | BlinkState::LedsTurnedOff { .. } => &self.off_leds,
-            BlinkState::LedsTurnedOn { .. } => &self.on_leds,
-        }))
+        let leds = match self.blink_configuration {
+            BlinkConfiguration::Disabled => {
+                if self.enabled {
+                    &self.on_leds
+                } else {
+                    &self.off_leds
+                }
+            }
+            BlinkConfiguration::Enabled { state, .. } => match state {
+                BlinkState::NotBlinking | BlinkState::LedsTurnedOff { .. } => &self.off_leds,
+                BlinkState::LedsTurnedOn { .. } => &self.on_leds,
+            },
+        };
+
+        Box::new(std::iter::once(leds))
     }
 
     fn disable(&mut self) {
-        self.blink_state = BlinkState::NotBlinking;
+        self.enabled = false;
+        self.blink_configuration.update(false);
     }
 
     fn led_count(&self) -> usize {

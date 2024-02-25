@@ -93,6 +93,20 @@ pub enum LedContainer {
 }
 
 impl LedContainer {
+    pub fn enabled(&self) -> bool {
+        match self {
+            LedContainer::Rpm(c) => c.is_enabled,
+            LedContainer::RpmSegments(c) => c.is_enabled,
+            LedContainer::RedlineReached(c) => c.is_enabled,
+            LedContainer::SpeedLimiterAnimation(c) => c.is_enabled,
+            LedContainer::Group(c) => c.is_enabled(),
+            LedContainer::BlueFlag(c) => c.is_enabled,
+            LedContainer::WhiteFlag(c) => c.is_enabled,
+            LedContainer::YellowFlag(c) => c.is_enabled,
+            LedContainer::Unknown { .. } => false,
+        }
+    }
+
     pub fn start_position(&self) -> NonZeroUsize {
         match self {
             LedContainer::Rpm(c) => c.start_position,
@@ -117,6 +131,15 @@ pub enum GroupContainer {
 }
 
 impl GroupContainer {
+    pub fn is_enabled(&self) -> bool {
+        match self {
+            GroupContainer::Simple(c) => c.is_enabled,
+            GroupContainer::GameRunning(c) => c.is_enabled,
+            GroupContainer::CarStarted(c) => c.is_enabled,
+            GroupContainer::Conditional(c) => c.is_enabled,
+        }
+    }
+
     pub fn start_position(&self) -> NonZeroUsize {
         match self {
             GroupContainer::Simple(c) => c.start_position,

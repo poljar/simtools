@@ -138,6 +138,12 @@ impl EffectGroup {
         let mut start_position = group_start_position;
 
         for container in containers {
+            // If the container is defined in the profile, but not enabled, skip it. No need
+            // to waste memory on effects that shouldn't modify the LED states.
+            if !container.enabled() {
+                continue;
+            }
+
             if stacking_type == StackingType::Layered {
                 start_position =
                     group_start_position.saturating_add(container.start_position().get() - 1);

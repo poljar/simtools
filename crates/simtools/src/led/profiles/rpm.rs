@@ -25,9 +25,10 @@ use serde::{Deserialize, Deserializer};
 use uom::si::{
     angular_velocity::revolution_per_minute,
     f64::{AngularVelocity, Ratio},
+    ratio::ratio,
 };
 
-use super::{color_from_str, default_non_zero, duration_from_int_ms};
+use super::{color_from_str, default_non_zero, default_true, duration_from_int_ms};
 
 /// The configuration for a LED profile container which turns on LEDs based on
 /// the value of the RPM of the engine.
@@ -113,56 +114,148 @@ pub struct RpmContainer {
 ///
 /// This container will divide a larger number of LEDs into smaller subsets or
 /// segments. Each segment can have a different configuration.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[derive(Debug, Clone)]
 pub struct RpmSegmentsContainer {
     /// The human readable description of the [`RpmContainer`].
-    #[serde(default)]
     pub description: String,
     /// Is this container enabled.
     pub is_enabled: bool,
     /// The number of the first LED this container should control.
-    #[serde(default = "default_non_zero")]
     pub start_position: NonZeroUsize,
-    /// The number of segments this container has. This value isn't particularly
-    /// useful since it's better to take a look at
-    /// [`RPMSegmentsContainer::segments::len()`]
-    pub segments_count: u32,
-    /// Should the LEDs blink when TODO: When do we blink here exactly?
-    #[serde(default)]
+    /// Should the LEDs blink when the redline has been reached?
     pub blink_enabled: bool,
     /// How long should the LED stay on and off when blinking, in other words
     /// how long do we wait before we change the state of the LED.
-    #[serde(default, deserialize_with = "duration_from_int_ms")]
     pub blink_delay: Duration,
     /// Should the LEDs only (or as well?) blink when the maximum RPM or
     /// percentage of it are reached in the last gear?
-    #[serde(default)]
     pub blink_on_last_gear: bool,
     /// The list of LED segments.
     pub segments: Vec<LedSegment>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub struct LedSegment {
-    pub start_value: Ratio,
-    pub end_value: Ratio,
-    #[serde(deserialize_with = "color_from_str")]
-    pub normal_color: Color,
-    #[serde(deserialize_with = "color_from_str")]
-    pub blinking_color: Color,
-    pub use_blinking_color: bool,
-    pub led_count: NonZeroUsize,
-    pub sample_result: SampleResult,
+#[derive(Debug, Clone, Copy)]
+enum RpmMode {
+    Rpm,
+    RpmPercentage,
+    RedlinePercentage,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct SampleResult {
-    pub width: u32,
-    pub position: u32,
-    pub columns: i32,
+struct LedSegmentHelper {
+    start_value: f64,
+    #[serde(deserialize_with = "color_from_str")]
+    normal_color: Color,
+    #[serde(deserialize_with = "color_from_str")]
+    blinking_color: Color,
+    #[serde(default = "default_true")]
+    use_blinking_color: bool,
+    led_count: NonZeroUsize,
+}
+
+#[derive(Debug, Clone)]
+pub enum StartValue {
+    Rpm(AngularVelocity),
+    RpmPercentage(Ratio),
+    RedlinePercentage(Ratio),
+}
+
+#[derive(Debug, Clone)]
+pub struct LedSegment {
+    pub start_value: StartValue,
+    pub normal_color: Color,
+    pub blinking_color: Option<Color>,
+    pub led_count: NonZeroUsize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct RpmSegmentsContainerHelper {
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub is_enabled: bool,
+    #[serde(default = "default_non_zero")]
+    start_position: NonZeroUsize,
+    #[serde(default = "default_true")]
+    blink_enabled: bool,
+    #[serde(default, deserialize_with = "duration_from_int_ms")]
+    blink_delay: Duration,
+    #[serde(default)]
+    blink_on_last_gear: bool,
+    segments: Vec<LedSegmentHelper>,
+    rpm_mode: RpmMode,
+}
+
+impl<'de> Deserialize<'de> for RpmMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let number = u8::deserialize(deserializer)?;
+
+        match number {
+            0 => Ok(RpmMode::RpmPercentage),
+            1 => Ok(RpmMode::RedlinePercentage),
+            2 => Ok(RpmMode::Rpm),
+            n => Err(serde::de::Error::custom(format!("Invalid RPM mode {n}"))),
+        }
+    }
+}
+
+impl LedSegment {
+    fn new(mode: RpmMode, segment: LedSegmentHelper) -> Self {
+        let start_value = match mode {
+            RpmMode::Rpm => {
+                StartValue::Rpm(AngularVelocity::new::<revolution_per_minute>(segment.start_value))
+            }
+            RpmMode::RpmPercentage => {
+                StartValue::RpmPercentage(Ratio::new::<ratio>(segment.start_value))
+            }
+            RpmMode::RedlinePercentage => {
+                StartValue::RedlinePercentage(Ratio::new::<ratio>(segment.start_value))
+            }
+        };
+
+        Self {
+            start_value,
+            normal_color: segment.normal_color,
+            blinking_color: segment.use_blinking_color.then(|| segment.blinking_color),
+            led_count: segment.led_count,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for RpmSegmentsContainer {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let RpmSegmentsContainerHelper {
+            description,
+            is_enabled,
+            start_position,
+            blink_enabled,
+            blink_delay,
+            blink_on_last_gear,
+            segments,
+            rpm_mode,
+        } = RpmSegmentsContainerHelper::deserialize(deserializer)?;
+
+        let segments =
+            segments.into_iter().map(|segment| LedSegment::new(rpm_mode, segment)).collect();
+
+        Ok(Self {
+            description,
+            is_enabled,
+            start_position,
+            blink_enabled,
+            blink_delay,
+            blink_on_last_gear,
+            segments,
+        })
+    }
 }
 
 /// Helper to deserialize a float containing a RPM value into a

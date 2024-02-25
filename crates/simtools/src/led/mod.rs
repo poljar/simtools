@@ -24,4 +24,5 @@
 //! profile formats and
 
 pub mod effects;
+pub mod macros;
 pub mod profiles;

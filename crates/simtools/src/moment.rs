@@ -19,7 +19,11 @@
 // SOFTWARE.
 
 use simetry::Moment;
-use uom::si::{f64::Ratio, ratio::ratio};
+use uom::si::{
+    angular_velocity::revolution_per_minute,
+    f64::{AngularVelocity, Ratio},
+    ratio::ratio,
+};
 
 /// Extension trait for the [`Moment`] trait.
 ///
@@ -27,8 +31,6 @@ use uom::si::{f64::Ratio, ratio::ratio};
 /// contained in the [`Moment`] trait.
 pub trait MomentExt: Moment {
     fn redline_reached(&self) -> bool {
-        const ERROR_MARGIN_PERCENTAGE: f64 = 0.02;
-
         let Some(rpm) = self.vehicle_engine_rotation_speed() else {
             return false;
         };
@@ -37,14 +39,24 @@ pub trait MomentExt: Moment {
             return false;
         };
 
-        let error_margin = ERROR_MARGIN_PERCENTAGE * max_rpm;
-
-        // TODO: Add an optional argument that contains a per car and per gear DB of
-        // redlines or rather ideal shiftpoints.
+        let redline = self.redline_rpm();
 
         // If we're within 2% of the MAX RPM of a car, we're going to consider this to
         // be at the redline.
-        (max_rpm - rpm).abs() < error_margin
+        (max_rpm - rpm).abs() < redline
+    }
+
+    fn redline_rpm(&self) -> AngularVelocity {
+        const ESTIMATED_REDLINE_PERCENTAGE: f64 = 0.02;
+
+        // TODO: Add a database of cars and the redline values, use the redline value
+        // from the DB if it exists, otherwise use the estimated redline.
+        if let Some(max_rpm) = self.vehicle_max_engine_rotation_speed() {
+            max_rpm * ESTIMATED_REDLINE_PERCENTAGE
+        } else {
+            // TODO: Is this a good default? Doubtful.
+            AngularVelocity::new::<revolution_per_minute>(9000.0)
+        }
     }
 
     fn rpm_percentage(&self) -> Ratio {

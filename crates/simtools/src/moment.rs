@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 use simetry::Moment;
+use uom::si::{f64::Ratio, ratio::ratio};
 
 /// Extension trait for the [`Moment`] trait.
 ///
@@ -44,6 +45,19 @@ pub trait MomentExt: Moment {
         // If we're within 2% of the MAX RPM of a car, we're going to consider this to
         // be at the redline.
         (max_rpm - rpm).abs() < error_margin
+    }
+
+    fn rpm_percentage(&self) -> Ratio {
+        let Some(rpm) = self.vehicle_engine_rotation_speed() else {
+            return Ratio::new::<ratio>(0.0);
+        };
+
+        let Some(max_rpm) = self.vehicle_max_engine_rotation_speed() else {
+            return Ratio::new::<ratio>(0.0);
+        };
+
+        // TODO: Should we clamp this so it's in the 0 - 100 range?
+        rpm / max_rpm * 100.0
     }
 
     fn is_engine_running(&self) -> bool {

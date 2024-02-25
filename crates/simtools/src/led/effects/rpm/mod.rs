@@ -19,3 +19,37 @@
 // SOFTWARE.
 
 pub mod gradient;
+
+#[cfg(test)]
+pub mod test {
+    use simetry::Moment;
+    use uom::si::{angular_velocity::revolution_per_minute, f64::AngularVelocity};
+
+    pub struct RpmSimState {
+        rpm: AngularVelocity,
+        max_rpm: AngularVelocity,
+    }
+
+    impl RpmSimState {
+        pub fn new(rpm: f64, rpm_max: f64) -> Self {
+            Self {
+                rpm: AngularVelocity::new::<revolution_per_minute>(rpm),
+                max_rpm: AngularVelocity::new::<revolution_per_minute>(rpm_max),
+            }
+        }
+
+        pub fn update_rpm(&mut self, rpm: f64) {
+            self.rpm = AngularVelocity::new::<revolution_per_minute>(rpm);
+        }
+    }
+
+    impl Moment for RpmSimState {
+        fn vehicle_engine_rotation_speed(&self) -> Option<AngularVelocity> {
+            Some(self.rpm)
+        }
+
+        fn vehicle_max_engine_rotation_speed(&self) -> Option<AngularVelocity> {
+            Some(self.max_rpm)
+        }
+    }
+}

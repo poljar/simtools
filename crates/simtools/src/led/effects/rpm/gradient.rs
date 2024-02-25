@@ -22,7 +22,10 @@ use std::{num::NonZeroUsize, time::Instant};
 
 use colorgrad::{CustomGradient, Gradient};
 use simetry::Moment;
-use uom::si::{f64::AngularVelocity, ratio::ratio};
+use uom::si::{
+    f64::{AngularVelocity, Ratio},
+    ratio::ratio,
+};
 
 use crate::{
     led::{
@@ -72,13 +75,11 @@ impl RpmGradientEffect {
     fn calculate_how_many_leds_to_turn_on(
         &self,
         rpm: AngularVelocity,
-        max_rpm: AngularVelocity,
+        rpm_percentage: Ratio,
     ) -> usize {
         let led_count = self.state.leds.len();
 
         let percentage_of_leds_to_turn_on = if self.container.use_percent {
-            let rpm_percentage = rpm / max_rpm * 100.0;
-
             let percentage_min = self.container.percent_min;
             let percentage_max = self.container.percent_max;
 
@@ -133,12 +134,11 @@ impl RpmGradientEffect {
         let Some(rpm) = sim_state.vehicle_engine_rotation_speed() else {
             return;
         };
-        let Some(max_rpm) = sim_state.vehicle_max_engine_rotation_speed() else {
-            return;
-        };
+
+        let rpm_percentage = sim_state.rpm_percentage();
 
         let next_blink_state = self.calculate_next_blink_state(sim_state);
-        let leds_to_turn_on = self.calculate_how_many_leds_to_turn_on(rpm, max_rpm);
+        let leds_to_turn_on = self.calculate_how_many_leds_to_turn_on(rpm, rpm_percentage);
 
         let led_iterator: Box<dyn Iterator<Item = &mut LedConfiguration>> =
             if self.container.right_to_left {
@@ -217,38 +217,9 @@ impl LedEffect for RpmGradientEffect {
 mod test {
     use serde_json::json;
     use similar_asserts::assert_eq;
-    use uom::si::{angular_velocity::revolution_per_minute, f64::AngularVelocity};
 
     use super::*;
-    use crate::leds;
-
-    struct RpmSimState {
-        rpm: AngularVelocity,
-        max_rpm: AngularVelocity,
-    }
-
-    impl RpmSimState {
-        fn new(rpm: f64, rpm_max: f64) -> Self {
-            Self {
-                rpm: AngularVelocity::new::<revolution_per_minute>(rpm),
-                max_rpm: AngularVelocity::new::<revolution_per_minute>(rpm_max),
-            }
-        }
-
-        fn update_rpm(&mut self, rpm: f64) {
-            self.rpm = AngularVelocity::new::<revolution_per_minute>(rpm);
-        }
-    }
-
-    impl Moment for RpmSimState {
-        fn vehicle_engine_rotation_speed(&self) -> Option<AngularVelocity> {
-            Some(self.rpm)
-        }
-
-        fn vehicle_max_engine_rotation_speed(&self) -> Option<AngularVelocity> {
-            Some(self.max_rpm)
-        }
-    }
+    use crate::{led::effects::rpm::test::RpmSimState, leds};
 
     fn container() -> RpmContainer {
         let container = json!({

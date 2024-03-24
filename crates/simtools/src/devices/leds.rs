@@ -28,7 +28,7 @@ use crate::led::effects::{groups::EffectGroup, LedConfiguration, LedEffect, LedG
 
 pub struct LmxLeds {
     device: HidDevice,
-    leds: [u8; 21 * 4],
+    leds: [u8; LmxLeds::COMMAND_BUFFER_SIZE * LmxLeds::SEGMENT_COUNT],
 }
 
 #[derive(Debug, Clone, Copy, EnumIter)]

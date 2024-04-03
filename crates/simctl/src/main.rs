@@ -18,14 +18,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{fs::File, io::BufReader, path::PathBuf};
+use std::{fs::File, io::BufReader, path::PathBuf, time::Duration};
 
 use anyhow::{Context as _, Result};
 use cairo::{Format, ImageSurface};
 use clap::{Parser, Subcommand};
+use simetry::{Moment, RacingFlags};
 use simtools::{
-    devices::{LmxWheel, USBD480Display},
-    led::{effects::groups::EffectGroup, profiles::LedProfile},
+    devices::{GridBrows, LmxWheel, USBD480Display},
+    led::{
+        effects::{groups::EffectGroup, LedEffect},
+        profiles::LedProfile,
+    },
 };
 
 #[derive(Debug, Parser)]
@@ -80,29 +84,65 @@ fn draw_letter(display: &USBD480Display) -> Result<()> {
     Ok(())
 }
 
+async fn foo(mut device: GridBrows, mut something: EffectGroup) -> Result<()> {
+    #[derive(Debug, Default)]
+    struct Foo {
+        yellow: bool,
+    }
+
+    impl Foo {
+        fn update(&mut self) {
+            self.yellow = !self.yellow;
+        }
+    }
+
+    impl Moment for Foo {
+        fn flags(&self) -> Option<simetry::RacingFlags> {
+            Some(RacingFlags { yellow: self.yellow, ..Default::default() })
+        }
+    }
+
+    println!("Running RPM based LED configuration:\n\t",);
+
+    let mut foo = Foo::default();
+
+    loop {
+        something.update(&foo);
+
+        for state in something.leds() {
+            device.apply_led_state(state).context("Could not apply the new LED state")?;
+        }
+
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        foo.update();
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let mut lmx = LmxWheel::open()?;
+    // let mut lmx = LmxWheel::open()?;
+    let mut brows = GridBrows::open()?;
 
     match cli.command {
-        CliCommand::Draw => {
-            draw_letter(lmx.display())?;
-        }
-        CliCommand::ShowDeviceDetails => {
-            let device_details = lmx.display().get_device_details()?;
-            println!("Got device details: {device_details:#?}");
-        }
-        CliCommand::SetBrightness { brightness } => {
-            lmx.display().set_brightness(brightness)?;
-        }
-        CliCommand::GetConfigValue => {
-            lmx.display().get_config_value()?;
-        }
-        CliCommand::SetButtonColor { red, green, blue } => {
-            lmx.buttons().set_color(red, green, blue)?;
-        }
+        // CliCommand::Draw => {
+        //     draw_letter(lmx.display())?;
+        // }
+        // CliCommand::ShowDeviceDetails => {
+        //     let device_details = lmx.display().get_device_details()?;
+        //     println!("Got device details: {device_details:#?}");
+        // }
+        // CliCommand::SetBrightness { brightness } => {
+        //     lmx.display().set_brightness(brightness)?;
+        // }
+        // CliCommand::GetConfigValue => {
+        //     lmx.display().get_config_value()?;
+        // }
+        // CliCommand::SetButtonColor { red, green, blue } => {
+        //     lmx.buttons().set_color(red, green, blue)?;
+        // }
         CliCommand::RpmTest { profile } => {
             let profile = File::open(profile).context("Couldn't open the LED profile")?;
             let reader = BufReader::new(profile);
@@ -111,8 +151,10 @@ async fn main() -> Result<()> {
                 serde_json::from_reader(reader).context("Could not deserialize the LED profile")?;
             let root_group = EffectGroup::root(profile);
 
-            lmx.rpm_leds_mut().run_led_profile(root_group).await?;
+            foo(brows, root_group).await?;
         }
+
+        _ => unreachable!(),
     }
 
     Ok(())

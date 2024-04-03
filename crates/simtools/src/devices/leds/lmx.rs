@@ -22,21 +22,12 @@ use anyhow::{Context as _, Result};
 use csscolorparser::Color;
 use hidapi::{HidApi, HidDevice};
 use simetry::assetto_corsa_competizione::Client;
-use strum::{EnumIter, IntoEnumIterator};
 
 use crate::led::effects::{groups::EffectGroup, LedConfiguration, LedEffect, LedGroup};
 
 pub struct LmxLeds {
     device: HidDevice,
     leds: [u8; LmxLeds::COMMAND_BUFFER_SIZE * LmxLeds::SEGMENT_COUNT],
-}
-
-#[derive(Debug, Clone, Copy, EnumIter)]
-pub enum LedNumber {
-    One = 2,
-    Two = 6,
-    Three = 10,
-    Four = 14,
 }
 
 pub struct Led<'a> {
@@ -69,13 +60,6 @@ pub struct LedSegment<'a> {
 impl<'a> LedSegment<'a> {
     const BYTES_PER_LED: usize = 4;
 
-    pub fn get_led(&mut self, led: LedNumber) -> Led {
-        let buffer = &mut self.buffer[led as usize..led as usize + Self::BYTES_PER_LED];
-
-        Led { buffer }
-    }
-
-    #[allow(dead_code)]
     pub fn leds(&mut self) -> impl Iterator<Item = Led> {
         self.buffer[2..].chunks_exact_mut(Self::BYTES_PER_LED).map(Led::new)
     }
@@ -139,9 +123,7 @@ impl LmxLeds {
         let segments = self.segments();
 
         for mut segment in segments {
-            for led in LedNumber::iter() {
-                let mut led = segment.get_led(led);
-
+            for mut led in segment.leds() {
                 led.set_color(&Color::from_rgba8(0x00, 0x00, 0x00, 0x00));
                 led.set_brightness(0x00);
             }
@@ -154,7 +136,7 @@ impl LmxLeds {
         Ok(())
     }
 
-    pub fn segments(&mut self) -> impl Iterator<Item = LedSegment> {
+    fn segments(&mut self) -> impl Iterator<Item = LedSegment> {
         self.leds.chunks_exact_mut(21).map(|buffer| LedSegment { buffer, device: &self.device })
     }
 

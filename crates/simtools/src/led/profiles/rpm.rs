@@ -134,8 +134,9 @@ pub struct RpmSegmentsContainer {
     pub segments: Vec<LedSegment>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 enum RpmMode {
+    #[default]
     Rpm,
     RpmPercentage,
     RedlinePercentage,
@@ -185,6 +186,7 @@ struct RpmSegmentsContainerHelper {
     #[serde(default)]
     blink_on_last_gear: bool,
     segments: Vec<LedSegmentHelper>,
+    #[serde(default)]
     rpm_mode: RpmMode,
 }
 
